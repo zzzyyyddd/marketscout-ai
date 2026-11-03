@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Search, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Search, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 
 type SearchResult =
   | { status: 'cached'; username: string }
@@ -16,8 +16,9 @@ export default function UsernameSearch({
 }) {
   const [username, setUsername] = useState('');
   const [result, setResult] = useState<SearchResult>(null);
+  const [loading, setLoading] = useState(false);
 
-  function handleSearch(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const normalized = username.trim().replace(/^@/, '').toLowerCase();
@@ -35,20 +36,46 @@ export default function UsernameSearch({
       return;
     }
 
-    if (normalized === cachedUsername.toLowerCase()) {
-      setResult({
-        status: 'cached',
-        username: normalized,
-      });
+    setLoading(true);
+    setResult(null);
 
-      document.getElementById('competitor-report')?.scrollIntoView({
-        behavior: 'smooth',
-      });
-    } else {
+    try {
+      const response = await fetch(
+        `/api/profile?username=${encodeURIComponent(normalized)}`,
+        { cache: 'no-store' }
+      );
+
+      if (!response.ok) {
+        throw new Error('Profile lookup failed.');
+      }
+
+      const data = await response.json();
+
+      if (data.status === 'cached' && data.username === normalized) {
+        if (data.username !== cachedUsername.toLowerCase()) {
+          throw new Error('Cached report is not available in this dashboard.');
+        }
+
+        setResult({ status: 'cached', username: normalized });
+
+        document.getElementById('competitor-report')?.scrollIntoView({
+          behavior: 'smooth',
+        });
+      } else if (
+        data.status === 'not_cached' &&
+        data.username === normalized
+      ) {
+        setResult({ status: 'not_cached', username: normalized });
+      } else {
+        throw new Error('Unexpected API response.');
+      }
+    } catch {
       setResult({
-        status: 'not_cached',
-        username: normalized,
+        status: 'error',
+        message: 'Unable to check this profile. Please try again.',
       });
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -62,8 +89,8 @@ export default function UsernameSearch({
       </div>
 
       <p className="mb-5 text-sm text-slate-300">
-        Enter any public Instagram username to check available
-        intelligence. New live x402 purchases are not enabled yet.
+        Search available Instagram intelligence.
+        Live x402 purchases are not enabled yet.
       </p>
 
       <form onSubmit={handleSearch} className="flex flex-col gap-3 sm:flex-row">
@@ -76,14 +103,17 @@ export default function UsernameSearch({
           placeholder="@instagram"
           aria-label="Instagram username"
           maxLength={31}
-          className="min-w-0 flex-1 rounded-xl border border-white/20 bg-slate-950 px-4 py-3 text-white outline-none focus:border-emerald-400"
+          disabled={loading}
+          className="min-w-0 flex-1 rounded-xl border border-white/20 bg-slate-950 px-4 py-3 text-white outline-none focus:border-emerald-400 disabled:opacity-60"
         />
 
         <button
           type="submit"
-          className="rounded-xl bg-emerald-400 px-6 py-3 font-semibold text-slate-950 transition hover:bg-emerald-300"
+          disabled={loading}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-400 px-6 py-3 font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:opacity-60"
         >
-          Analyze
+          {loading ? <Loader2 size={18} className="animate-spin" /> : <Search size={18} />}
+          {loading ? 'Checking...' : 'Analyze'}
         </button>
       </form>
 
@@ -115,7 +145,7 @@ export default function UsernameSearch({
       )}
 
       <p className="mt-4 text-xs text-slate-400">
-        Try @instagram to explore our verified historical testnet dataset.
+        Try @instagram to explore our historical testnet dataset.
       </p>
     </section>
   );
