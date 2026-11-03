@@ -1,4 +1,5 @@
 import IntelligenceExplorer from './intelligence-explorer';
+import UsernameSearch from './username-search';
 import snapshot from '../../data/instagram-snapshot.json';
 import { analyzeCompetitor, normalizeInstagram } from '@/lib/instagram';
 import { BarChart3, ExternalLink, ShieldCheck, TrendingUp, Users, Video } from 'lucide-react';
@@ -32,6 +33,9 @@ export default function Home() {
           <p className="mt-5 max-w-2xl text-slate-400">Explore real Instagram data previously purchased through an x402 payment on Celo Sepolia. This is a saved snapshot, not a live scan.</p>
         </section>
 
+        <UsernameSearch cachedUsername={report.username} />
+
+        <div id="competitor-report">
         <section className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-6">
           <p className="text-xs uppercase tracking-widest text-slate-400">Analyzed account</p>
           <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
@@ -85,6 +89,7 @@ export default function Home() {
             </div>
           </div>
         </section>
+        </div>
         <IntelligenceExplorer posts={report.posts} />
         <footer className="mt-12 border-t border-white/10 pt-6 text-xs text-slate-500">MarketScout AI · Historical sandbox data · Live mainnet integration pending</footer>
       </div>
