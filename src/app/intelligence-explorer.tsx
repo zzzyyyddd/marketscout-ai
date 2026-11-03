@@ -18,8 +18,10 @@ const compact = (n: number) =>
 
 export default function IntelligenceExplorer({
   posts,
+  historical = true,
 }: {
   posts: CompetitorPost[];
+  historical?: boolean;
 }) {
   const [filter, setFilter] = useState<FilterMode>('all');
   const [sort, setSort] = useState<SortMode>('interactions');
@@ -74,12 +76,13 @@ export default function IntelligenceExplorer({
             Content Performance Explorer
           </h2>
           <p className="mt-2 text-sm text-slate-400">
-            Explore the historical x402 dataset. Filters and rankings
-            are calculated locally; no new data is purchased.
+            {historical
+              ? 'Explore the historical x402 dataset. Filters and rankings are calculated locally; no new data is purchased.'
+              : 'Explore the saved account report. Filters and rankings are calculated locally; no new data is purchased.'}
           </p>
         </div>
         <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-300">
-          Historical snapshot · Not live
+          {historical ? 'Historical snapshot · Not live' : 'Cached report · Not a live scan'}
         </span>
       </div>
 
@@ -203,7 +206,7 @@ export default function IntelligenceExplorer({
         <TrendingUp size={15} className="mt-0.5 shrink-0" />
         <p>
           Interactions = likes + comments. These are descriptive
-          statistics from a limited historical sample, not predictions
+          statistics from a limited sample, not predictions
           or live competitor monitoring.
         </p>
       </div>

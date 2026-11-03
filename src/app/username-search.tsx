@@ -1,22 +1,39 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { isCompetitorReport } from '@/lib/report';
+import type { CompetitorReport } from '@/lib/report';
 import { Search, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 
 type SearchResult =
-  | { status: 'cached'; username: string }
+  | { status: 'cached'; username: string; historical: boolean }
   | { status: 'not_cached'; username: string }
   | { status: 'error'; message: string }
   | null;
 
 export default function UsernameSearch({
   cachedUsername,
+  onReportSelected,
+  onSearchStarted,
+  onReportUnavailable,
 }: {
   cachedUsername: string;
+  onReportSelected?: (
+    report: CompetitorReport,
+    mode: string,
+    network?: string
+  ) => void;
+  onSearchStarted?: () => void;
+  onReportUnavailable?: () => void;
 }) {
   const [username, setUsername] = useState('');
   const [result, setResult] = useState<SearchResult>(null);
   const [loading, setLoading] = useState(false);
+  const requestRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => requestRef.current?.abort();
+  }, []);
 
   async function handleSearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -29,6 +46,7 @@ export default function UsernameSearch({
       normalized.endsWith('.') ||
       normalized.includes('..')
     ) {
+      onReportUnavailable?.();
       setResult({
         status: 'error',
         message: 'Enter a valid Instagram username.',
@@ -36,13 +54,18 @@ export default function UsernameSearch({
       return;
     }
 
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
+
     setLoading(true);
     setResult(null);
+    onSearchStarted?.();
 
     try {
       const response = await fetch(
         `/api/profile?username=${encodeURIComponent(normalized)}`,
-        { cache: 'no-store' }
+        { cache: 'no-store', signal: controller.signal }
       );
 
       if (!response.ok) {
@@ -51,31 +74,64 @@ export default function UsernameSearch({
 
       const data = await response.json();
 
+      if (controller.signal.aborted) return;
+
       if (data.status === 'cached' && data.username === normalized) {
-        if (data.username !== cachedUsername.toLowerCase()) {
-          throw new Error('Cached report is not available in this dashboard.');
+        if (
+          !isCompetitorReport(data.report) ||
+          data.report.username.toLowerCase() !== normalized ||
+          typeof data.mode !== 'string' ||
+          (data.network !== undefined && typeof data.network !== 'string')
+        ) {
+          throw new Error('Invalid cached report.');
         }
 
-        setResult({ status: 'cached', username: normalized });
+        if (!onReportSelected && normalized !== cachedUsername.toLowerCase()) {
+          throw new Error('Dashboard is not connected.');
+        }
 
-        document.getElementById('competitor-report')?.scrollIntoView({
-          behavior: 'smooth',
+        onReportSelected?.(
+          data.report,
+          data.mode,
+          data.network
+        );
+
+        setResult({
+          status: 'cached',
+          username: normalized,
+          historical:
+            data.mode === 'historical_snapshot' &&
+            normalized === 'instagram' &&
+            data.network === 'celo-sepolia',
+        });
+
+        requestAnimationFrame(() => {
+          if (controller.signal.aborted) return;
+          document.getElementById('competitor-report')?.scrollIntoView({
+            behavior: 'smooth',
+          });
         });
       } else if (
         data.status === 'not_cached' &&
         data.username === normalized
       ) {
+        onReportUnavailable?.();
         setResult({ status: 'not_cached', username: normalized });
       } else {
         throw new Error('Unexpected API response.');
       }
     } catch {
+      if (controller.signal.aborted) return;
+      onReportUnavailable?.();
       setResult({
         status: 'error',
         message: 'Unable to check this profile. Please try again.',
       });
     } finally {
-      setLoading(false);
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+        setLoading(false);
+      }
     }
   }
 
@@ -97,13 +153,16 @@ export default function UsernameSearch({
         <input
           value={username}
           onChange={(event) => {
+            requestRef.current?.abort();
+            requestRef.current = null;
+            setLoading(false);
             setUsername(event.target.value);
             setResult(null);
+            onReportUnavailable?.();
           }}
           placeholder="@instagram"
           aria-label="Instagram username"
           maxLength={31}
-          disabled={loading}
           className="min-w-0 flex-1 rounded-xl border border-white/20 bg-slate-950 px-4 py-3 text-white outline-none focus:border-emerald-400 disabled:opacity-60"
         />
 
@@ -121,7 +180,9 @@ export default function UsernameSearch({
         <div role="status" className="mt-4 flex items-start gap-2 text-sm text-emerald-300">
           <CheckCircle2 size={18} className="shrink-0" />
           <p>
-            Cached historical report found for @{result.username}.
+            {result.historical
+              ? 'Historical snapshot'
+              : 'Cached report'} found for @{result.username}.
             The report below uses saved data, not a fresh scan.
           </p>
         </div>
