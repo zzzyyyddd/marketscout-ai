@@ -1,36 +1,131 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MarketScout AI
 
-## Getting Started
+**Onchain-paid social intelligence powered by Celo and x402.**
 
-First, run the development server:
+Built for **Agents on Open Rails Hackathon 2026 — Build with buy**.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+MarketScout AI demonstrates an agent-oriented workflow for purchasing external social data through x402, analyzing competitor content, and presenting actionable performance insights.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Features
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Instagram competitor profile intelligence
+- Interactive explorer with filtering and sorting
+- Engagement metrics and top-performing posts
+- Video versus non-video comparison
+- x402 integration using `@celo/buy-core`
+- Celo USDC payment support
+- Strict payment network, token, recipient, and URL validation
+- Per-request and daily spending limits
+- Supabase-backed payment accounting
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Technology
 
-## Learn More
+Next.js 16, React 19, TypeScript, Celo, x402, @celo/buy-core, Supabase PostgreSQL, and Vercel.
 
-To learn more about Next.js, take a look at the following resources:
+## Architecture
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Request Instagram competitor data
+2. Gateway responds with HTTP 402
+3. SDK selects an allowed Celo USDC payment offer
+4. Payment policy validates network, token, recipient, URL, and amount
+5. Spending ledger reserves the payment budget
+6. Payment authorization enables access to the data
+7. Data is normalized and analyzed
+8. Dashboard presents competitor insights
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+This describes the payment workflow architecture. Production live payments are currently disabled.
 
-## Deploy on Vercel
+## Current Dashboard
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The dashboard uses a historical x402 sandbox snapshot containing 12 Instagram posts.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Users can explore engagement statistics, compare content formats, sort posts, and inspect caption previews.
+
+Current analytics are deterministic descriptive statistics, not LLM-generated analysis.
+
+## Verified Celo Sepolia x402 Payment
+
+A real x402 request succeeded on Celo Sepolia.
+
+- Network: Celo Sepolia
+- Asset: testnet USDC
+- Payment: 0.005 USDC
+- HTTP response: 200
+- Transaction: https://celo-sepolia.blockscout.com/tx/0xe02aa5ce58a261683e062d22c62f67c567f0aead9617f073ff8dea73609f7f92
+
+This is testnet evidence, not a mainnet payment.
+
+## Celo Mainnet Readiness
+
+- Mainnet HTTP 402 gateway offer discovered
+- Mainnet USDC offer selected successfully by the SDK
+- Mainnet payment policy: 12/12 tests passed
+- Sepolia payment policy: 10/10 tests passed
+- Mainnet payment execution: not yet completed
+- Production live payments: disabled
+
+The mainnet policy is not yet connected to the live scan route.
+
+## Security
+
+- Environment variables for sensitive configuration
+- Local `.env.local` excluded from Git
+- Strict payment destination and asset allowlists
+- Maximum payment per request: 0.005 USDC
+- Daily spending reservation cap: 0.05 USDC
+- Supabase RPC payment reservation and settlement
+- No automatic retry after an uncertain paid request
+- Live payments blocked in production
+
+## Local Development
+
+Requirements: Node.js 22 or newer.
+
+Install dependencies:
+
+    npm ci
+
+Start the development server:
+
+    npm run dev
+
+Open http://localhost:3000.
+
+The snapshot dashboard does not require live payment credentials.
+
+## Tests
+
+Production build:
+
+    npm run build
+
+Payment policy tests:
+
+    node scripts/test-payment-policy.mjs
+    node scripts/test-mainnet-payment-policy.mjs
+
+SDK selection tests:
+
+    node scripts/test-x402-selection.mjs
+    node scripts/test-mainnet-selection.mjs
+
+The mainnet selection test obtains a free HTTP 402 challenge without making a payment.
+
+## Deployment
+
+Import the GitHub repository into Vercel as a Next.js project.
+
+The dashboard is statically generated and can be hosted without running a local laptop.
+
+Live payments remain disabled in production.
+
+## Current Limitations
+
+- Historical snapshot rather than live public scans
+- Descriptive analytics rather than LLM-generated insights
+- Mainnet policy implemented but not connected to the payment route
+- No completed mainnet payment transaction yet
+
+## License
+
+Not yet specified.

@@ -1,0 +1,295 @@
+{
+  "output": {
+    "username": "instagram",
+    "full_name": "Instagram",
+    "biography": "Discover what's new on Instagram 🔎✨",
+    "edge_followed_by": {
+      "count": 686358280
+    },
+    "edge_follow": {
+      "count": 164
+    },
+    "edge_owner_to_timeline_media": {
+      "count": 8631,
+      "edges": [
+        {
+          "node": {
+            "shortcode": "DfPQchkG1tg",
+            "taken_at_timestamp": 1793620814,
+            "edge_media_to_caption": {
+              "edges": [
+                {
+                  "node": {
+                    "text": "@alexiaputellas is a three-time @ballondorofficial winner 💛\n\nswipe to get ready with the @londoncitylionesses star, walk the red carpet and celebrate with her after one of the biggest nights in football.\n\nstyle rule no. 1: be yourself\n\nnumber 11 since day one and the idol who inspired it ⚽\n\nhead-to-toe @ballondorofficial ready ✨\n\nan inspiration to future generations 🤍\n\njust a girl and her Ballon d’Or 🏆"
+                  }
+                }
+              ]
+            },
+            "edge_media_preview_like": {
+              "count": 216953
+            },
+            "edge_media_to_comment": {
+              "count": 2368
+            },
+            "video_view_count": null,
+            "is_video": false
+          }
+        },
+        {
+          "node": {
+            "shortcode": "DfISRt1vadT",
+            "taken_at_timestamp": 1793386980,
+            "edge_media_to_caption": {
+              "edges": [
+                {
+                  "node": {
+                    "text": "For designer @____t_a_t_a___, nature is the ultimate muse — unpredictable, strange, textured, and “beautiful and unsettling at the same time.”⁣\n⁣\nHer process mirrors nature. Every piece is made freehand, through improvisation and instinct, allowing “the process to unfold naturally rather than deciding what the final result should look like.”⁣\n⁣\nVideo by @____t_a_t_a___"
+                  }
+                }
+              ]
+            },
+            "edge_media_preview_like": {
+              "count": 249269
+            },
+            "edge_media_to_comment": {
+              "count": 13688
+            },
+            "video_view_count": 12937699,
+            "is_video": true
+          }
+        },
+        {
+          "node": {
+            "shortcode": "DfH-Y3JugI4",
+            "taken_at_timestamp": 1793376634,
+            "edge_media_to_caption": {
+              "edges": [
+                {
+                  "node": {
+                    "text": "making a spider with nothing but sunlight ☀️🔎⁣\n⁣\n#InTheMoment \n\nVideo by @solar_pyro_g\n\nMusic by @toolmusic"
+                  }
+                }
+              ]
+            },
+            "edge_media_preview_like": {
+              "count": 994484
+            },
+            "edge_media_to_comment": {
+              "count": 8742
+            },
+            "video_view_count": 63031901,
+            "is_video": true
+          }
+        },
+        {
+          "node": {
+            "shortcode": "DfFSUCaB3Ty",
+            "taken_at_timestamp": 1793286367,
+            "edge_media_to_caption": {
+              "edges": [
+                {
+                  "node": {
+                    "text": "Meet one of this year’s Rings judges 💍⁣\n⁣\nWe asked @finneas what he looked for in the Rings ‘26 Winners. His answer:⁣\n“There’s an inherent level of embarrassment you have to grapple with to put yourself out there over and over. I admire all of these people for getting over that stumbling block.” See the full list of winners now on @creators."
+                  }
+                }
+              ]
+            },
+            "edge_media_preview_like": {
+              "count": 219939
+            },
+            "edge_media_to_comment": {
+              "count": 8149
+            },
+            "video_view_count": 6496165,
+            "is_video": true
+          }
+        },
+        {
+          "node": {
+            "shortcode": "DfAOoAXRg3L",
+            "taken_at_timestamp": 1793116773,
+            "edge_media_to_caption": {
+              "edges": [
+                {
+                  "node": {
+                    "text": "An original, straight from the studio 🎶⁣\n⁣\n@lolabllue is a musician figuring it out one song at a time.⁣\n⁣\n“I’ll write about whatever I’m feeling that day, whatever I wanna say in that moment. I always try to have fun with it and not take myself too seriously.”⁣\n⁣\nVideo and music by @lolabllue"
+                  }
+                }
+              ]
+            },
+            "edge_media_preview_like": {
+              "count": 263236
+            },
+            "edge_media_to_comment": {
+              "count": 14587
+            },
+            "video_view_count": 16031959,
+            "is_video": true
+          }
+        },
+        {
+          "node": {
+            "shortcode": "De-BjWlSquq",
+            "taken_at_timestamp": 1793042674,
+            "edge_media_to_caption": {
+              "edges": [
+                {
+                  "node": {
+                    "text": "beware: meownster under the bed 🐱⁣\n⁣\n#InTheMoment⁣\n⁣\nVideo by @itsmariahmeow⁣\n⁣\nMusic by @myuusic"
+                  }
+                }
+              ]
+            },
+            "edge_media_preview_like": {
+              "count": 645921
+            },
+            "edge_media_to_comment": {
+              "count": 8925
+            },
+            "video_view_count": 25857016,
+            "is_video": true
+          }
+        },
+        {
+          "node": {
+            "shortcode": "De2bNIWSZdB",
+            "taken_at_timestamp": 1792787702,
+            "edge_media_to_caption": {
+              "edges": [
+                {
+                  "node": {
+                    "text": "this paper art? peak cozy vibes 🍂📚⁣\n⁣\n#InTheMoment⁣\n⁣\nVideo by @alleymcglynn⁣\n⁣\nMusic by @morunas.music"
+                  }
+                }
+              ]
+            },
+            "edge_media_preview_like": {
+              "count": 402243
+            },
+            "edge_media_to_comment": {
+              "count": 18591
+            },
+            "video_view_count": 23604924,
+            "is_video": true
+          }
+        },
+        {
+          "node": {
+            "shortcode": "DewxhTugF2T",
+            "taken_at_timestamp": 1792598422,
+            "edge_media_to_caption": {
+              "edges": [
+                {
+                  "node": {
+                    "text": "Ride @kade_2000’s Rampage line with him 🚵‍♂️\n\n@redbullusa’s freeride mountain bike competition, Red Bull Rampage, returned to the original Utah cliffs for its 25th anniversary.\n\ncaptured on @oakleymeta AI glasses."
+                  }
+                }
+              ]
+            },
+            "edge_media_preview_like": {
+              "count": 158290
+            },
+            "edge_media_to_comment": {
+              "count": 11168
+            },
+            "video_view_count": 8342905,
+            "is_video": true
+          }
+        },
+        {
+          "node": {
+            "shortcode": "DeroUGDhF2D",
+            "taken_at_timestamp": 1792425706,
+            "edge_media_to_caption": {
+              "edges": [
+                {
+                  "node": {
+                    "text": "new NBA season prep with @jordanclarksons and @cbrickley603 🏀\n\nthe @nyknicks shooting guard joins the legendary basketball trainer in the gym for a custom workout."
+                  }
+                }
+              ]
+            },
+            "edge_media_preview_like": {
+              "count": 175954
+            },
+            "edge_media_to_comment": {
+              "count": 14945
+            },
+            "video_view_count": 10025364,
+            "is_video": true
+          }
+        },
+        {
+          "node": {
+            "shortcode": "DeewiSPpCrm",
+            "taken_at_timestamp": 1791993604,
+            "edge_media_to_caption": {
+              "edges": [
+                {
+                  "node": {
+                    "text": "when dance meets Double Dutch 💃⁣\n⁣\n#InTheMoment⁣\n⁣\nVideo by @asuki_millecolle and @ikkyon_millecolle⁣\n⁣\nMusic by MagnusTheMagnus⁣\n⁣\nChoreography by @sangmyungdance"
+                  }
+                }
+              ]
+            },
+            "edge_media_preview_like": {
+              "count": 514614
+            },
+            "edge_media_to_comment": {
+              "count": 16518
+            },
+            "video_view_count": 20014017,
+            "is_video": true
+          }
+        },
+        {
+          "node": {
+            "shortcode": "DecLR_vvrW6",
+            "taken_at_timestamp": 1791907183,
+            "edge_media_to_caption": {
+              "edges": [
+                {
+                  "node": {
+                    "text": "“Wouldn’t it be fun to have something like this in a room?”⁣\n⁣\nThat’s what painter @hichiyan686 asks herself before creating three-dimensional works like this vintage wall phone.⁣\n⁣\nHer creative process? “I close my eyes and imagine myself floating beneath the sea. In that imaginary underwater world, I turn the words, images and sensations I encounter into paintings.”⁣\n⁣\nVideo by @hichiyan686"
+                  }
+                }
+              ]
+            },
+            "edge_media_preview_like": {
+              "count": 345540
+            },
+            "edge_media_to_comment": {
+              "count": 14048
+            },
+            "video_view_count": 16777587,
+            "is_video": true
+          }
+        },
+        {
+          "node": {
+            "shortcode": "DePb6WLuVae",
+            "taken_at_timestamp": 1791479431,
+            "edge_media_to_caption": {
+              "edges": [
+                {
+                  "node": {
+                    "text": "fur real, every single one of these is the best one 🐾⁣\n⁣\n#InTheMoment⁣\n⁣\nVideo by @miso_ara⁣\n⁣\nMusic by Vadim Chaimovich"
+                  }
+                }
+              ]
+            },
+            "edge_media_preview_like": {
+              "count": 780123
+            },
+            "edge_media_to_comment": {
+              "count": 24944
+            },
+            "video_view_count": 25847629,
+            "is_video": true
+          }
+        }
+      ]
+    },
+    "is_business_account": false
+  }
+}

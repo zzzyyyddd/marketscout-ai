@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# MarketScout local payment state
+.market-scout-state/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
