@@ -13,9 +13,9 @@ import {
   settlePayment,
 } from '@/lib/supabase-ledger';
 import {
-  normalizeInstagram,
-  analyzeCompetitor,
-} from '@/lib/instagram';
+  validateScanReport,
+} from '@/lib/scan-report-validation';
+import { writeCachedProfile } from '@/lib/profile-cache-write';
 
 
 const ENDPOINT =
@@ -106,6 +106,10 @@ export async function POST(request: Request) {
         },
 
         onPayment: async (info) => {
+          // Record the gateway outcome before ledger accounting.
+          // A failed ledger write must not erase a confirmed outcome.
+          paymentOutcome = info.outcome;
+
           if (!reservationId) {
             throw new Error('Missing payment reservation');
           }
@@ -117,8 +121,6 @@ export async function POST(request: Request) {
               ? 'confirmed'
               : 'ambiguous'
           );
-
-          paymentOutcome = info.outcome;
         },
 
         onAccountingError: (error) => {
@@ -138,15 +140,36 @@ export async function POST(request: Request) {
     }
 
     const raw = await response.json();
-    const report = analyzeCompetitor(
-      normalizeInstagram(raw)
+    const report = validateScanReport(
+      raw,
+      username
     );
+
+    let cacheStatus: 'stored' | 'not_updated' | 'failed' =
+      'failed';
+
+    try {
+      const stored = await writeCachedProfile(
+        username,
+        report
+      );
+
+      cacheStatus = stored ? 'stored' : 'not_updated';
+    } catch (error) {
+      console.error(
+        'Cache write failed after confirmed payment:',
+        error instanceof Error ? error.message : 'Unknown error'
+      );
+    }
 
     return NextResponse.json({
       mode: 'live',
       network: 'celo-sepolia',
       username,
       report,
+      cache: {
+        status: cacheStatus,
+      },
     });
   } catch (error) {
     console.error(
