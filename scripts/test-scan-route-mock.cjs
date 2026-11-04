@@ -212,9 +212,9 @@ async function run(name, settings, expected) {
   ));
 
   results.push(await run(
-    'Confirmed + settlement failure',
+    'Confirmed + settlement failure blocks success',
     { outcome: 'confirmed', settlementFails: true },
-    { status: 200, cacheCalls: 1, cacheStatus: 'stored' }
+    { status: 502, cacheCalls: 0 }
   ));
 
   const passed = results.filter(Boolean).length;

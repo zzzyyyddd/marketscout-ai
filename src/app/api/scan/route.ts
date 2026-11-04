@@ -75,6 +75,7 @@ export async function POST(request: Request) {
   );
 
   let reservationId: string | undefined;
+  let accountingSettled = false;
   let paymentOutcome:
     | 'confirmed'
     | 'rejected'
@@ -121,6 +122,8 @@ export async function POST(request: Request) {
               ? 'confirmed'
               : 'ambiguous'
           );
+
+          accountingSettled = true;
         },
 
         onAccountingError: (error) => {
@@ -132,7 +135,7 @@ export async function POST(request: Request) {
       }
     );
 
-    if (!response.ok || paymentOutcome !== 'confirmed') {
+    if (!response.ok || paymentOutcome !== 'confirmed' || !accountingSettled) {
       return NextResponse.json(
         { error: 'Paid scan did not complete successfully' },
         { status: 502 }
