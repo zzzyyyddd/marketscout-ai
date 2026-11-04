@@ -1,0 +1,18 @@
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+  "name": "MarketScout AI",
+  "description": "An onchain-paid social intelligence application that uses Celo x402 to purchase Instagram profile data and generate deterministic engagement analytics. Live paid scanning is currently disabled in the public deployment.",
+  "image": "https://marketscout-ai-three.vercel.app/favicon.ico",
+  "services": [
+    {
+      "name": "web",
+      "endpoint": "https://marketscout-ai-three.vercel.app"
+    },
+    {
+      "name": "profile-api",
+      "endpoint": "https://marketscout-ai-three.vercel.app/api/profile?username=instagram"
+    }
+  ],
+  "x402Support": false,
+  "active": true
+}
