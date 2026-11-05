@@ -1,4 +1,5 @@
 import 'server-only';
+import type { PaymentNetwork } from './payment-network-config';
 
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
@@ -56,19 +57,56 @@ export async function reservePayment(
   return id;
 }
 
-export async function settlePayment(
+export async function attachPaymentAuthorization(
   id: string,
-  status: 'confirmed' | 'ambiguous'
-): Promise<void> {
+  metadata: {
+    payer: string;
+    recipient: string;
+    token: string;
+    amount: bigint;
+    nonce: string;
+    validAfter: bigint;
+    validBefore: bigint;
+  }
+,
+  network: PaymentNetwork): Promise<void> {
   const { data, error } = await getClient().rpc(
-    'marketscout_settle_payment',
+    'marketscout_attach_payment_authorization',
     {
       p_id: id,
-      p_status: status,
+      p_payer: metadata.payer,
+      p_recipient: metadata.recipient,
+      p_token: metadata.token,
+      p_amount: Number(metadata.amount),
+      p_nonce: metadata.nonce,
+      p_valid_after: Number(metadata.validAfter),
+      p_valid_before: Number(metadata.validBefore),
+      p_network: network,
     }
   );
 
   if (error || data !== true) {
-    throw new Error('Payment settlement accounting failed');
+    throw new Error('Payment evidence persistence failed');
+  }
+}
+
+export async function settleVerifiedPayment(
+  id: string,
+  txHash: string,
+  payer: string,
+  nonce: string
+): Promise<void> {
+  const { data, error } = await getClient().rpc(
+    'marketscout_settle_verified_payment',
+    {
+      p_id: id,
+      p_tx_hash: txHash,
+      p_payer: payer,
+      p_nonce: nonce,
+    }
+  );
+
+  if (error || data !== true) {
+    throw new Error('Verified payment settlement failed');
   }
 }

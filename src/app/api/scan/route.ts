@@ -10,12 +10,22 @@ import {
 } from '@/lib/payment-policy';
 import {
   reservePayment,
-  settlePayment,
+  attachPaymentAuthorization,
 } from '@/lib/supabase-ledger';
 import {
   validateScanReport,
 } from '@/lib/scan-report-validation';
 import { writeCachedProfile } from '@/lib/profile-cache-write';
+import {
+  extractPaymentAuthorization,
+  type PaymentAuthorizationMetadata,
+} from '@/lib/payment-authorization-metadata';
+import { verifyAndSettlePayment } from '@/lib/payment-verified-settlement';
+import {
+  getPaymentNetworkConfig,
+  type PaymentNetwork,
+} from '@/lib/payment-network-config';
+
 
 
 const ENDPOINT =
@@ -41,12 +51,16 @@ export async function POST(request: Request) {
 
   // This implementation is local-development only.
   // Never enable it in a public deployment.
-  if (process.env.MARKETSCOUT_NETWORK !== 'celo-sepolia') {
+  const configuredNetwork = process.env.MARKETSCOUT_NETWORK;
+  if (configuredNetwork !== 'celo-sepolia') {
     return NextResponse.json(
       { error: 'Unsupported payment network' },
       { status: 503 }
     );
   }
+
+  const network: PaymentNetwork = configuredNetwork as PaymentNetwork;
+  const policy = getPaymentNetworkConfig(network);
 
   let username: string;
 
@@ -75,7 +89,13 @@ export async function POST(request: Request) {
   );
 
   let reservationId: string | undefined;
+  let selectedRequirements: Parameters<
+    typeof extractPaymentAuthorization
+  >[1] | undefined;
+  let paidRequestSent = false;
   let accountingSettled = false;
+  let authorizationMetadata:
+    PaymentAuthorizationMetadata | undefined;
   let paymentOutcome:
     | 'confirmed'
     | 'rejected'
@@ -86,8 +106,52 @@ export async function POST(request: Request) {
     const response = await payingFetch(
       {
         account,
-        network: 'celo-sepolia',
+        network,
         preferredToken: 'USDC',
+        fetchImpl: async (input, init) => {
+          const headers = new Headers(init?.headers);
+          const hasPayment =
+            headers.has('X-PAYMENT') ||
+            headers.has('PAYMENT-SIGNATURE');
+
+          if (!hasPayment) {
+            return fetch(input, init);
+          }
+
+          if (paidRequestSent) {
+            throw new Error('Duplicate paid request blocked');
+          }
+
+          if (!reservationId || !selectedRequirements) {
+            throw new Error('Payment reservation missing');
+          }
+
+          const metadata = extractPaymentAuthorization(
+            headers,
+            selectedRequirements,
+              network
+          );
+
+          if (
+            metadata.payer.toLowerCase() !==
+            account.address.toLowerCase()
+          ) {
+            throw new Error('Unexpected payment payer');
+          }
+
+          // Prevent another paid attempt even if persistence fails.
+          paidRequestSent = true;
+
+          await attachPaymentAuthorization(
+            reservationId,
+            metadata,
+              network
+          );
+
+          authorizationMetadata = metadata;
+
+          return fetch(input, init);
+        },
       },
       ENDPOINT,
       {
@@ -96,7 +160,7 @@ export async function POST(request: Request) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ username }),
-        maxAmount: PAYMENT_POLICY.maxPerRequestAtomic,
+        maxAmount: policy.maxPerRequestAtomic,
         maxRetries: 1,
 
         onBeforePayment: async (requirements) => {
@@ -104,23 +168,31 @@ export async function POST(request: Request) {
             validatePaymentRequirements(requirements);
 
           reservationId = await reservePayment(amount);
+          selectedRequirements = requirements;
         },
 
         onPayment: async (info) => {
-          // Record the gateway outcome before ledger accounting.
-          // A failed ledger write must not erase a confirmed outcome.
           paymentOutcome = info.outcome;
 
-          if (!reservationId) {
-            throw new Error('Missing payment reservation');
+          if (!reservationId || !authorizationMetadata) {
+            throw new Error('Payment evidence missing');
           }
 
-          // Even a rejected HTTP response can have settled.
-          await settlePayment(
+          if (
+            info.outcome !== 'confirmed' ||
+            !info.txHash ||
+            !/^0x[0-9a-fA-F]{64}$/.test(info.txHash)
+          ) {
+            throw new Error(
+              'Payment not independently verifiable'
+            );
+          }
+
+          await verifyAndSettlePayment(
             reservationId,
-            info.outcome === 'confirmed'
-              ? 'confirmed'
-              : 'ambiguous'
+            info.txHash as `0x${string}`,
+            authorizationMetadata,
+            network
           );
 
           accountingSettled = true;
@@ -167,7 +239,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       mode: 'live',
-      network: 'celo-sepolia',
+      network,
       username,
       report,
       cache: {
