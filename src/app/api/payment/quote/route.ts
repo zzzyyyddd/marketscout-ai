@@ -95,7 +95,7 @@ export async function GET() {
         amountUSDC: '0.005',
         resource: GATEWAY,
         accepted: matching[0],
-        signingEnabled: false,
+        signingEnabled: process.env.MARKETSCOUT_PUBLIC_PAYMENTS === 'true',
       },
       {
         headers: {

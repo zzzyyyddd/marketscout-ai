@@ -9,6 +9,8 @@ import {
   validatePublicPaymentExecutionResult,
 } from '@/lib/public-payment-client';
 import PublicPaymentPanel from './public-payment-panel';
+import { buildBrowserPublicPayment } from '@/lib/build-browser-public-payment';
+import { validatePublicPaymentQuote } from '@/lib/public-payment-validation';
 
 type SearchResult =
   | { status: 'cached'; username: string; historical: boolean }
@@ -64,7 +66,133 @@ export default function UsernameSearch({
     });
   }
 
-  void handlePaymentResult;
+  const [paying, setPaying] = useState(false);
+  const [paymentLocked, setPaymentLocked] = useState(false);
+  const [paymentMessage, setPaymentMessage] = useState('');
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('marketscout_pending_payment_v1')) {
+        setPaymentLocked(true);
+        setPaymentMessage(
+          'Previous payment authorization may still be processing. ' +
+          'Do not pay again until its status is verified.'
+        );
+      }
+    } catch {
+      setPaymentLocked(true);
+      setPaymentMessage(
+        'Unable to verify previous payment state. Do not pay again.'
+      );
+    }
+  }, []);
+
+  async function handleLivePayment() {
+    if (paying || paymentLocked) return;
+
+    try {
+      if (localStorage.getItem('marketscout_pending_payment_v1')) {
+        setPaymentLocked(true);
+        setPaymentMessage(
+          'Previous payment authorization exists. ' +
+          'Do not pay again until its status is verified.'
+        );
+        return;
+      }
+    } catch {
+      setPaymentLocked(true);
+      setPaymentMessage('Payment state unavailable. Do not pay again.');
+      return;
+    }
+
+    const target = username.trim().replace(/^@/, '').toLowerCase();
+
+    if (!/^[a-z0-9._]{1,30}$/.test(target) ||
+        target.startsWith('.') || target.endsWith('.') ||
+        target.includes('..')) {
+      setPaymentMessage('Enter a valid Instagram username.');
+      return;
+    }
+
+    setPaying(true);
+    setPaymentMessage('');
+
+    let authorizationCreated = false;
+
+    try {
+      const quoteResponse = await fetch('/api/payment/quote', {
+        cache: 'no-store',
+      });
+
+      if (!quoteResponse.ok) throw new Error('Payment quote unavailable');
+
+      const quote = validatePublicPaymentQuote(await quoteResponse.json());
+
+      if (quote.signingEnabled !== true) {
+        throw new Error('Payment signing is not enabled by the gateway');
+      }
+
+      const confirmed = window.confirm(
+        'Authorize a payment of 0.005 USDC on Celo Mainnet ' +
+        'for a live Instagram scan of @' + target + '?\n\n' +
+        'Recipient: ' + quote.recipient + '\n\n' +
+        'Do not retry if payment status becomes uncertain.'
+      );
+
+      if (!confirmed) return;
+
+      const payment = await buildBrowserPublicPayment(quote);
+      authorizationCreated = true;
+      setPaymentLocked(true);
+
+      try {
+        localStorage.setItem(
+          'marketscout_pending_payment_v1',
+          JSON.stringify({
+            username: target,
+            payer: payment.payer,
+            createdAt: Date.now(),
+            status: 'authorization_created',
+          })
+        );
+      } catch {
+        throw new Error(
+          'Cannot safely persist payment authorization. ' +
+          'Do not pay again until status is verified.'
+        );
+      }
+
+      const response = await fetch('/api/payment/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: target,
+          payer: payment.payer,
+          paymentHeader: payment.paymentHeader,
+        }),
+      });
+
+      const data: unknown = await response.json();
+
+      if (response.status !== 200 && response.status !== 202) {
+        throw new Error('Payment execution failed. Do not pay again.');
+      }
+
+      handlePaymentResult(data);
+      setPaymentMessage(
+        response.status === 200
+          ? 'Payment verified. Live report loaded.'
+          : 'Payment requires reconciliation. Do not pay again.'
+      );
+    } catch (cause) {
+      setPaymentMessage(
+        (cause instanceof Error ? cause.message : 'Payment failed') +
+        (authorizationCreated ? ' Do not pay again.' : '')
+      );
+    } finally {
+      setPaying(false);
+    }
+  }
   const [username, setUsername] = useState('');
   const [result, setResult] = useState<SearchResult>(null);
   const [loading, setLoading] = useState(false);
@@ -184,8 +312,8 @@ export default function UsernameSearch({
       </div>
 
       <p className="mb-5 text-sm text-slate-300">
-        Search available Instagram intelligence.
-        Live x402 purchases are not enabled yet.
+        Explore saved Instagram reports or request a live scan
+        for 0.005 USDC on Celo Mainnet.
       </p>
 
       <PublicPaymentPanel />
@@ -220,14 +348,20 @@ export default function UsernameSearch({
       <div className="mt-3">
         <button
           type="button"
-          disabled
-          aria-label="Pay 0.005 USDC and scan live, currently unavailable"
-          title="Live Mainnet payments are not enabled yet"
-          className="w-full cursor-not-allowed rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-5 py-3 text-sm font-semibold text-emerald-200 opacity-60"
+          disabled={paying || paymentLocked}
+          onClick={handleLivePayment}
+          aria-label="Pay 0.005 USDC and scan live"
+          className="w-full cursor-pointer rounded-xl border border-emerald-400 bg-emerald-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Pay 0.005 USDC & Scan Live — Coming Soon
+          {paying ? 'Processing payment...' : paymentLocked ? 'Payment submitted — Do not retry' : 'Pay 0.005 USDC & Scan Live'}
         </button>
       </div>
+
+      {paymentMessage && (
+        <p role="status" className="mt-3 text-sm text-amber-300">
+          {paymentMessage}
+        </p>
+      )}
 
       {result?.status === 'cached' && (
         <div role="status" className="mt-4 flex items-start gap-2 text-sm text-emerald-300">

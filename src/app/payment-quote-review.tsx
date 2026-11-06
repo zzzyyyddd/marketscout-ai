@@ -126,7 +126,7 @@ export default function PaymentQuoteReview({
           )}
 
           <p className="text-amber-300">
-            Payment signing is not enabled yet. No funds have been spent.
+            Wallet readiness does not authorize payment. Signing is requested only after you confirm a live scan.
           </p>
         </div>
       )}

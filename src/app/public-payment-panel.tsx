@@ -86,8 +86,8 @@ export default function PublicPaymentPanel() {
       )}
 
       <p className="mt-3 text-xs text-amber-300">
-        Live payments are currently disabled. No wallet signature or
-        transaction will be requested.
+        Live scans require wallet authorization. Review the
+        amount, network, and recipient before signing.
       </p>
     </section>
   );
