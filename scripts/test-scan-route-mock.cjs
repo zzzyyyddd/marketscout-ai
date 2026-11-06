@@ -41,14 +41,16 @@ const mocks = {
     privateKeyToAccount: () => ({ address: 'mock' }),
   },
   '@celo/buy-core/x402': {
-    payingFetch: async (_ctx, _url, options) => {
+    payingFetch: async (ctx, _url, options) => {
       paymentCalls++;
 
       await options.onBeforePayment({
         maxAmountRequired: '5000',
       });
 
+      await ctx.fetchImpl('https://offline.invalid', { headers: { 'PAYMENT-SIGNATURE': 'offline' } });
       await options.onPayment({
+        txHash: '0x' + 'ab'.repeat(32),
         outcome: scenario.outcome,
       }).catch(error => {
         options.onAccountingError(error);
@@ -80,6 +82,7 @@ const mocks = {
   },
   '@/lib/supabase-ledger': {
     reservePayment: async () => 'mock-reservation',
+    attachPaymentAuthorization: async () => {},
     settlePayment: async () => {
       settlementCalls++;
       if (scenario.settlementFails) {
@@ -87,6 +90,12 @@ const mocks = {
       }
     },
   },
+  '@/lib/payment-network-config': { getPaymentNetworkConfig: () => ({ maxPerRequestAtomic: 5000n }) },
+  '@/lib/payment-authorization-metadata': { extractPaymentAuthorization: () => ({ payer: 'mock' }) },
+  '@/lib/payment-verified-settlement': { verifyAndSettlePayment: async () => {
+    settlementCalls++;
+    if (scenario.settlementFails) throw new Error('Mock settlement failure');
+  } },
   '@/lib/scan-report-validation': {
     validateScanReport: raw => {
       if (raw.invalid) {
@@ -122,6 +131,7 @@ const sandbox = {
       MARKETSCOUT_PRIVATE_KEY: '0x' + '1'.repeat(64),
     },
   },
+  fetch: async () => Response.json({ offline: true }),
   Response,
   Request,
   Headers,
@@ -158,7 +168,7 @@ async function run(name, settings, expected) {
     assert.equal(response.status, expected.status);
     assert.equal(cacheCalls, expected.cacheCalls);
     assert.equal(paymentCalls, 1);
-    assert.equal(settlementCalls, 1);
+    assert.equal(settlementCalls, settings.outcome === 'confirmed' ? 1 : 0);
 
     if (expected.cacheStatus) {
       assert.equal(

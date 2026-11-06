@@ -176,11 +176,12 @@ export async function POST(request: Request) {
         return respond({ error: 'Report unavailable' }, 404);
       }
 
-      const result = await resumePaidResponse(reservationId);
-      if (result.status === 'settled' && isCompetitorReport(result.report)) return respond({ status: 'recovered', report: result.report });
-      // Older persisted reports remain recoverable after staging retention expires.
+      // Final reports must not depend on staging availability or another RPC
+      // verification. Authenticate/consume the challenge before either lookup.
       const saved = await db.rpc('marketscout_read_paid_report', { p_reservation_id: reservationId });
       if (!saved.error && isCompetitorReport(saved.data)) return respond({ status: 'recovered', report: saved.data });
+      const result = await resumePaidResponse(reservationId);
+      if (result.status === 'settled' && isCompetitorReport(result.report)) return respond({ status: 'recovered', report: result.report });
       return respond({ error: 'Report processing remains unresolved. Do not pay again.', reservationId }, 202);
     }
 

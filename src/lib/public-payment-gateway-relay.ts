@@ -8,9 +8,13 @@ import {
 const GATEWAY =
   `https://${POLICY.allowedHost}${POLICY.allowedPath}`;
 
+// https://usebuy.ai/limits documents a 150-second upstream deadline.
+// Allow its response to arrive before aborting a request that may be charged.
+const GATEWAY_RESPONSE_TIMEOUT_MS = 165000;
+
 export type GatewayPaymentResult =
   | {
-      status: 'confirmed';
+      status: 'received';
       txHash: `0x${string}`;
       body: unknown;
     }
@@ -31,7 +35,7 @@ export async function forwardPublicPaymentOnce(
       method: 'POST',
       redirect: 'manual',
       cache: 'no-store',
-      signal: AbortSignal.timeout(25000),
+      signal: AbortSignal.timeout(GATEWAY_RESPONSE_TIMEOUT_MS),
       headers: {
         'Content-Type': 'application/json',
         'PAYMENT-SIGNATURE': paymentHeader,
@@ -47,30 +51,43 @@ export async function forwardPublicPaymentOnce(
     };
   }
 
-  if (!response.ok) {
-    return {
-      status: 'unresolved',
-      reason: 'Gateway did not return confirmed success',
-    };
+  // HTTP errors can follow settlement. The provider documents transaction and
+  // output fields on settle_uncertain responses, even without a receipt header.
+  // These are only candidates: on-chain verification and report validation are
+  // mandatory after durable capture. Conflicting/malformed headers fail closed.
+  let txHash: `0x${string}` | undefined;
+  if (response.headers.has('PAYMENT-RESPONSE') || response.headers.has('X-PAYMENT-RESPONSE')) {
+    try { txHash = parsePaymentResponse(response.headers); }
+    catch {
+      await response.body?.cancel().catch(() => {});
+      return { status: 'unresolved', reason: 'Payment proof invalid or conflicting' };
+    }
   }
-
-  let txHash: `0x${string}`;
-  try { txHash = parsePaymentResponse(response.headers); }
-  catch { return { status: 'unresolved', reason: 'Payment proof invalid or conflicting' }; }
 
   try {
     const body: unknown = await readBoundedGatewayBody(response);
 
+    if (body && typeof body === 'object' && !Array.isArray(body)) {
+      const candidate = (body as Record<string, unknown>).transaction;
+      if (typeof candidate === 'string' && /^0x[0-9a-fA-F]{64}$/.test(candidate)) {
+        if (txHash && txHash !== candidate.toLowerCase()) {
+          return { status: 'unresolved', reason: 'Conflicting gateway transaction evidence' };
+        }
+        txHash = candidate.toLowerCase() as `0x${string}`;
+      }
+    }
+    if (!txHash) return { status: 'unresolved', reason: 'Gateway transaction evidence missing' };
+
     return {
-      status: 'confirmed',
-      txHash: txHash as `0x${string}`,
+      status: 'received',
+      txHash,
       body,
     };
   } catch {
     return {
       status: 'unresolved',
       reason: 'Gateway response body unavailable',
-      txHash: txHash as `0x${string}`,
+      txHash,
     };
   }
 }

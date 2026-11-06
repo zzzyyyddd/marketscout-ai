@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { PaymentAuthorizationMetadata } from './payment-authorization-metadata';
 import { verifyAndSettlePayment } from './payment-verified-settlement';
 import { validateScanReport } from './scan-report-validation';
-import { storePaidReport } from './paid-report-store';
+import { readPaidReport, storePaidReport } from './paid-report-store';
 import type { PublicPaymentExecution } from './public-payment-orchestrator';
 
 function database() {
@@ -30,19 +30,34 @@ export async function storeGatewayResponse(id: string, username: string, txHash:
 
 // This path accepts no payment signature and has no gateway dependency.
 export async function resumePaidResponse(reservationId: string): Promise<PublicPaymentExecution> {
-  const { data, error } = await database().rpc('marketscout_read_staged_response', { p_reservation_id: reservationId });
-  if (error || !data) return { status: 'unresolved', reservationId, reason: 'Saved gateway response unavailable; do not pay again' };
-  const row = data as { username: string; txHash: `0x${string}`; body: unknown; authorization: Record<string, string> };
-  const a = row.authorization;
-  const authorization = {
-    payer: a.payer, recipient: a.recipient, token: a.token, nonce: a.nonce,
-    amount: BigInt(a.amount), validAfter: BigInt(a.validAfter), validBefore: BigInt(a.validBefore),
-  } as PaymentAuthorizationMetadata;
-  try { await verifyAndSettlePayment(reservationId, row.txHash, authorization, 'celo'); }
-  catch { return { status: 'unresolved', reservationId, reason: 'Settlement verification requires retry' }; }
+  // Final-report recovery bypasses staging in the authenticated recovery route.
   try {
-    const report = validateScanReport(row.body, row.username);
-    await storePaidReport(reservationId, row.username, report);
-    return { status: 'settled', reservationId, txHash: row.txHash, report };
-  } catch { return { status: 'settled_report_unavailable', reservationId, txHash: row.txHash }; }
+    const { data, error } = await database().rpc('marketscout_read_staged_response', { p_reservation_id: reservationId });
+    if (error || !data) return { status: 'unresolved', reservationId, reason: 'Saved gateway response unavailable; do not pay again' };
+    const row = data as { username: string; txHash: `0x${string}`; body: unknown; authorization: Record<string, string> };
+    const existing = await readPaidReport(reservationId).catch(() => null);
+    if (existing && existing.username.toLowerCase() === row.username.toLowerCase()) {
+      return { status: 'settled', reservationId, txHash: row.txHash, report: existing };
+    }
+    const a = row.authorization;
+    const authorization = {
+      payer: a.payer, recipient: a.recipient, token: a.token, nonce: a.nonce,
+      amount: BigInt(a.amount), validAfter: BigInt(a.validAfter), validBefore: BigInt(a.validBefore),
+    } as PaymentAuthorizationMetadata;
+    try { await verifyAndSettlePayment(reservationId, row.txHash, authorization, 'celo'); }
+    catch { return { status: 'unresolved', reservationId, reason: 'Settlement verification requires retry' }; }
+    try {
+      const report = { ...validateScanReport(row.body, row.username), generatedAt: new Date().toISOString() };
+      try { await storePaidReport(reservationId, row.username, report); }
+      catch { /* A concurrent processor may have stored the immutable snapshot. Read it back. */ }
+      // Do not report delivery until the persisted report can actually be read.
+      const saved = await readPaidReport(reservationId);
+      if (!saved || saved.username.toLowerCase() !== row.username.toLowerCase()) {
+        throw new Error('Saved report unavailable');
+      }
+      return { status: 'settled', reservationId, txHash: row.txHash, report: saved };
+    } catch { return { status: 'settled_report_unavailable', reservationId, txHash: row.txHash }; }
+  } catch {
+    return { status: 'unresolved', reservationId, reason: 'Saved payment evidence unavailable; do not pay again' };
+  }
 }

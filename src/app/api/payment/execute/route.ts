@@ -11,9 +11,14 @@ import {
 } from '@/lib/public-payment-signature';
 
 import { executePublicPayment } from '@/lib/public-payment-orchestrator';
+import { assertControlledPaymentScope, publicPaymentsEnabled } from '@/lib/public-payment-readiness';
 
 
 const MAX_REQUEST_BYTES = 20000;
+
+// Leave time to durably stage a response after the provider's 150s deadline.
+// The hosting platform must honor this budget before payments are enabled.
+export const maxDuration = 300;
 
 function json(
   body: Record<string, unknown>,
@@ -31,7 +36,7 @@ export async function POST(request: Request) {
   // No gateway forwarding or settlement until explicitly enabled
   // after ledger, quote, and Mainnet verification are complete.
 
-  if (process.env.MARKETSCOUT_PUBLIC_PAYMENTS !== 'true') {
+  if (!publicPaymentsEnabled()) {
     return json(
       { error: 'Public payments disabled' },
       503
@@ -64,6 +69,8 @@ export async function POST(request: Request) {
     const body: unknown = JSON.parse(raw);
 
     const validated = validatePublicPaymentRequest(body);
+
+    assertControlledPaymentScope(validated.payer, validated.username, validated.reservationId);
 
     await verifyPublicPaymentSignature(
       validated.paymentHeader,

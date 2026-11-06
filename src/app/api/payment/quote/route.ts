@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getPaymentNetworkConfig } from '@/lib/payment-network-config';
+import { getControlledPaymentScope, publicPaymentsEnabled } from '@/lib/public-payment-readiness';
 
 
 
@@ -95,7 +96,8 @@ export async function GET() {
         amountUSDC: '0.005',
         resource: GATEWAY,
         accepted: matching[0],
-        signingEnabled: process.env.MARKETSCOUT_PUBLIC_PAYMENTS === 'true',
+        signingEnabled: publicPaymentsEnabled(),
+        controlledTest: publicPaymentsEnabled() ? getControlledPaymentScope() : null,
       },
       {
         headers: {

@@ -34,6 +34,9 @@ export function preparePublicPayment(
   if (!/^0x[0-9a-fA-F]{40}$/.test(payer)) {
     throw new Error('Invalid payer address');
   }
+  if (quote.signingEnabled && payer.toLowerCase() !== quote.controlledTest?.payer.toLowerCase()) {
+    throw new Error('Connect the approved test wallet');
+  }
 
   const requirements = {
     scheme: 'exact' as const,

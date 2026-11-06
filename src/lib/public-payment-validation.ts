@@ -22,6 +22,11 @@ export type PublicPaymentQuote = {
     };
   };
   signingEnabled: boolean;
+  controlledTest: {
+    payer: string;
+    username: string;
+    reservationId: string;
+  } | null;
 };
 
 export function validatePublicPaymentQuote(
@@ -32,6 +37,14 @@ export function validatePublicPaymentQuote(
   }
 
   const q = value as Partial<PublicPaymentQuote>;
+  const scope = q.controlledTest;
+  if (typeof q.signingEnabled !== 'boolean' || (q.signingEnabled && (
+    !scope || typeof scope.payer !== 'string' || !isAddress(scope.payer) ||
+    typeof scope.username !== 'string' || !/^[a-z0-9._]{1,30}$/.test(scope.username) ||
+    scope.username.startsWith('.') || scope.username.endsWith('.') || scope.username.includes('..') ||
+    typeof scope.reservationId !== 'string' ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(scope.reservationId)
+  ))) throw new Error('Invalid controlled payment scope');
   const a = q.accepted;
 
   if (!a || typeof a !== 'object') {

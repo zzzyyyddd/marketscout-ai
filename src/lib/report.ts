@@ -2,7 +2,7 @@ import { analyzeCompetitor } from './instagram';
 
 export type CompetitorReport = ReturnType<
   typeof analyzeCompetitor
->;
+> & { generatedAt?: string };
 
 export type ReportSource = {
   mode: string;
@@ -24,6 +24,11 @@ export function isCompetitorReport(
   ) return false;
 
   const r = value as Record<string, unknown>;
+  // Old historical reports have no generation timestamp. Never invent one.
+  if (r.generatedAt !== undefined && (
+    typeof r.generatedAt !== 'string' || !Number.isFinite(Date.parse(r.generatedAt)) ||
+    new Date(r.generatedAt).toISOString() !== r.generatedAt
+  )) return false;
 
   const numeric = [
     'followers',

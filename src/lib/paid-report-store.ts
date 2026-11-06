@@ -30,6 +30,14 @@ function getClient() {
   });
 }
 
+export async function readPaidReport(reservationId: string): Promise<CompetitorReport | null> {
+  const { data, error } = await getClient().rpc(
+    'marketscout_read_paid_report', { p_reservation_id: reservationId },
+  );
+  if (error) throw new Error('Paid report read unavailable');
+  return isCompetitorReport(data) ? data : null;
+}
+
 export async function storePaidReport(
   reservationId: string,
   username: string,

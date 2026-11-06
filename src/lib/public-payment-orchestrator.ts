@@ -1,4 +1,5 @@
 import 'server-only';
+import { assertControlledPaymentScope } from './public-payment-readiness';
 
 import { storeGatewayResponse, resumePaidResponse, assertResponseStorageReady } from './paid-response-store';
 
@@ -38,6 +39,7 @@ export async function executePublicPayment(
   username: string,
   reservationId?: string,
 ): Promise<PublicPaymentExecution> {
+  assertControlledPaymentScope(payer, username, reservationId);
   const authorization =
     await verifyPublicPaymentSignature(paymentHeader, payer);
 
@@ -79,10 +81,22 @@ export async function executePublicPayment(
   try {
     await storeGatewayResponse(
       reservation.reservationId, username, txHash,
-      result.status === 'confirmed' ? result.body : null,
+      result.status === 'received' ? result.body : null,
     );
   } catch {
-    return { status: 'unresolved', reservationId: reservation.reservationId, reason: 'Gateway response storage failed; do not pay again' };
+    // Retry only the idempotent database write, never the paid gateway request.
+    // The first write may have committed despite a lost acknowledgement.
+    try {
+      await storeGatewayResponse(
+        reservation.reservationId, username, txHash,
+        result.status === 'received' ? result.body : null,
+      );
+    } catch {
+      // A rejected/mismatched/oversized profile must not discard known payment
+      // evidence. Existing staging is immutable, so this cannot erase a body.
+      try { await storeGatewayResponse(reservation.reservationId, username, txHash, null); }
+      catch { /* Resume can still read a write whose acknowledgement was lost. */ }
+    }
   }
   return resumePaidResponse(reservation.reservationId);
 }

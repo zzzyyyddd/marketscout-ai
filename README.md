@@ -99,6 +99,17 @@ Production build:
 
     npm run build
 
+If this runner blocks Turbopack CSS-worker port binding (`Operation not permitted`),
+use the supported Webpack alternative without changing application configuration:
+
+    npx next build --webpack
+
+The gate in `src/lib/public-payment-readiness.ts` defaults closed. A controlled test
+requires both enable flags plus an approved wallet, username and fixed reservation
+UUID. Recovery is independent. See [the deployment/test procedure](docs/controlled-mainnet-test.md).
+Each payment buys an immutable analysis snapshot; recovery returns the saved report
+and its original generation timestamp without fetching Instagram again.
+
 Payment policy tests:
 
     node scripts/test-payment-policy.mjs

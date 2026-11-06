@@ -39,6 +39,11 @@ export default function CompetitorDashboard({
         <div id="competitor-report">
         <section className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-6">
           <p className="text-xs uppercase tracking-widest text-slate-400">Analyzed account</p>
+          <p className="mt-2 text-sm text-slate-400">
+            {report.generatedAt
+              ? <>Analysis snapshot generated <time dateTime={report.generatedAt}>{report.generatedAt}</time></>
+              : 'Historical snapshot · generation time not recorded'}
+          </p>
           <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
             <div><h3 className="text-2xl font-semibold">@{report.username}</h3><p className="text-slate-400">{report.name}</p></div>
             <a href={`https://www.instagram.com/${encodeURIComponent(report.username)}/`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">Instagram profile <ExternalLink size={15}/></a>

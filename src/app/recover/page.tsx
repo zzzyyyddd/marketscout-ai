@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createWalletClient, custom, getAddress, type Address } from 'viem';
 import { celo } from 'viem/chains';
+import { isCompetitorReport } from '@/lib/report';
 
 type Challenge = {
   message: string;
@@ -23,7 +24,13 @@ export default function RecoverPage() {
     if (!active) return;
     const fromUrl = new URLSearchParams(window.location.search).get('reservation');
     if (fromUrl) setReservationId(fromUrl);
-    else { try { setReservationId(JSON.parse(localStorage.getItem('marketscout_pending_payment_v1') ?? '{}').reservationId ?? ''); } catch { /* Manual ID entry remains available. */ } }
+    else {
+      try {
+        const pending = JSON.parse(localStorage.getItem('marketscout_pending_payment_v1') ?? '{}');
+        const last = JSON.parse(localStorage.getItem('marketscout_last_paid_report_v1') ?? '{}');
+        setReservationId(pending.reservationId ?? last.reservationId ?? '');
+      } catch { /* Manual ID entry remains available. */ }
+    }
     });
     return () => { active = false; };
   }, []);
@@ -86,11 +93,13 @@ export default function RecoverPage() {
         signature,
       });
 
-      if (result.status !== 'recovered') throw new Error(result.error ?? 'Recovery pending. Do not pay again.');
-      localStorage.setItem('marketscout_last_paid_report_v1', JSON.stringify({ reservationId: reservationId.trim() }));
-      const pending = JSON.parse(localStorage.getItem('marketscout_pending_payment_v1') ?? '{}');
-      if (pending.reservationId === reservationId.trim()) localStorage.removeItem('marketscout_pending_payment_v1');
+      if (result.status !== 'recovered' || !isCompetitorReport(result.report)) throw new Error(result.error ?? 'Recovery pending. Do not pay again.');
       setReport(result.report);
+      try {
+        localStorage.setItem('marketscout_last_paid_report_v1', JSON.stringify({ reservationId: reservationId.trim() }));
+        const pending = JSON.parse(localStorage.getItem('marketscout_pending_payment_v1') ?? '{}');
+        if (pending.reservationId === reservationId.trim()) localStorage.removeItem('marketscout_pending_payment_v1');
+      } catch { /* Render the recovered report even if browser storage fails. */ }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Recovery failed');
     } finally {
@@ -135,6 +144,9 @@ export default function RecoverPage() {
           <h2 className="font-semibold text-emerald-400">
             Report recovered successfully
           </h2>
+          {isCompetitorReport(report) && <p className="mt-2 text-sm text-slate-400">
+            {report.generatedAt ? <>Snapshot generated <time dateTime={report.generatedAt}>{report.generatedAt}</time></> : 'Historical snapshot · generation time not recorded'}
+          </p>}
           <pre className="mt-4 overflow-auto whitespace-pre-wrap text-xs">
             {JSON.stringify(report, null, 2)}
           </pre>

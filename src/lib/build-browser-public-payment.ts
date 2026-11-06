@@ -5,14 +5,23 @@ import { isAddress, type Address } from 'viem';
 
 import { createBrowserPaymentSigner } from './browser-payment-signer';
 import { checkPublicPaymentPreflight } from './public-payment-preflight';
+import { validatePublicPaymentQuote } from './public-payment-validation';
 
 export async function buildBrowserPublicPayment(
   rawQuote: unknown,
+  username: string,
 ): Promise<{
   payer: Address;
   paymentHeader: string;
 }> {
-  const preflight = await checkPublicPaymentPreflight(rawQuote);
+  const quote = validatePublicPaymentQuote(rawQuote);
+  if (!quote.signingEnabled || quote.controlledTest?.username !== username) {
+    throw new Error('Public payments disabled for this username');
+  }
+  const preflight = await checkPublicPaymentPreflight(quote);
+  if (preflight.payer.toLowerCase() !== quote.controlledTest.payer.toLowerCase()) {
+    throw new Error('Connect the approved test wallet');
+  }
 
   const provider = (window as Window & {
     ethereum?: {

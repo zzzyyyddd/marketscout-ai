@@ -40,15 +40,25 @@ export default function UsernameSearch({
 }) {
   // Handles a response after a future, explicitly enabled payment.
   // This function does not sign, send, or initiate a payment.
-  function handlePaymentResult(raw: unknown) {
+  function handlePaymentResult(raw: unknown, reservationId: string, target: string) {
     const result = validatePublicPaymentExecutionResult(raw);
+    if (result.reservationId.toLowerCase() !== reservationId.toLowerCase() ||
+        (result.status === 'settled' && result.report.username.toLowerCase() !== target)) {
+      throw new Error('Payment response does not match this scan. Do not pay again.');
+    }
 
-    const pending = JSON.parse(localStorage.getItem('marketscout_pending_payment_v1') ?? '{}');
-    localStorage.setItem('marketscout_pending_payment_v1', JSON.stringify({ ...pending, reservationId: result.reservationId, status: result.status }));
     setRecoveryId(result.reservationId);
+    // Storage can fail after the paid response arrives. Keep delivery and the
+    // recovery link available even when the browser receipt cannot be updated.
+    try {
+      const pending = JSON.parse(localStorage.getItem('marketscout_pending_payment_v1') ?? '{}');
+      localStorage.setItem('marketscout_pending_payment_v1', JSON.stringify({ ...pending, reservationId: result.reservationId, status: result.status }));
+    } catch { /* The pre-payment receipt and visible recovery ID remain available. */ }
     if (result.status === 'settled') {
-      localStorage.setItem('marketscout_last_paid_report_v1', JSON.stringify({ reservationId: result.reservationId }));
-      localStorage.removeItem('marketscout_pending_payment_v1');
+      try {
+        localStorage.setItem('marketscout_last_paid_report_v1', JSON.stringify({ reservationId: result.reservationId }));
+        localStorage.removeItem('marketscout_pending_payment_v1');
+      } catch { /* A receipt failure must not hide a durably stored report. */ }
       setCompleted(true);
       onLiveReportSelected?.(result.report, result.txHash);
       return;
@@ -80,6 +90,19 @@ export default function UsernameSearch({
   const [paying, setPaying] = useState(false);
   const [paymentLocked, setPaymentLocked] = useState(true);
   const [paymentMessage, setPaymentMessage] = useState('');
+  const [paymentEnabled, setPaymentEnabled] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch('/api/payment/quote', { cache: 'no-store', signal: controller.signal })
+      .then(async response => {
+        if (!response.ok) return;
+        const quote = validatePublicPaymentQuote(await response.json());
+        if (!controller.signal.aborted) setPaymentEnabled(quote.signingEnabled);
+      })
+      .catch(() => { /* Remain disabled if readiness cannot be verified. */ });
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -113,6 +136,7 @@ export default function UsernameSearch({
   }, []);
 
   async function handleLivePayment() {
+    if (!paymentEnabled) return;
     if (operationRef.current || paying || paymentLocked) return;
 
     try {
@@ -155,9 +179,10 @@ export default function UsernameSearch({
 
       const quote = validatePublicPaymentQuote(await quoteResponse.json());
 
-      if (quote.signingEnabled !== true) {
-        throw new Error('Payment signing is not enabled by the gateway');
+      if (!quote.signingEnabled || !quote.controlledTest) {
+        throw new Error('Payment signing is not enabled');
       }
+      if (quote.controlledTest.username !== target) throw new Error('Enter the approved test username: @' + quote.controlledTest.username);
 
       const confirmed = window.confirm(
         'Authorize a payment of 0.005 USDC on Celo Mainnet ' +
@@ -168,12 +193,12 @@ export default function UsernameSearch({
 
       if (!confirmed) return;
 
-      const reservationId = crypto.randomUUID();
+      const reservationId = quote.controlledTest.reservationId;
       operationId = reservationId;
       localStorage.setItem('marketscout_pending_payment_v1', JSON.stringify({ reservationId, username: target, status: 'signing' }));
       setPaymentLocked(true);
-      const payment = await buildBrowserPublicPayment(quote);
       setRecoveryId(reservationId);
+      const payment = await buildBrowserPublicPayment(quote, target);
       authorizationCreated = true;
       setPaymentLocked(true);
 
@@ -212,10 +237,10 @@ export default function UsernameSearch({
         throw new Error('Payment execution failed. Do not pay again.');
       }
 
-      handlePaymentResult(data);
+      handlePaymentResult(data, reservationId, target);
       setPaymentMessage(
         response.status === 200
-          ? 'Payment verified. Live report loaded.'
+          ? 'Payment verified. Paid analysis snapshot loaded.'
           : ''
       );
     } catch (cause) {
@@ -354,7 +379,7 @@ export default function UsernameSearch({
       </div>
 
       <p className="mb-5 text-sm text-slate-300">
-        Explore saved Instagram reports or request a live scan
+        Explore saved Instagram reports or purchase a new analysis snapshot
         for 0.005 USDC on Celo Mainnet.
       </p>
 
@@ -390,16 +415,15 @@ export default function UsernameSearch({
       <div className="mt-3">
         <button
           type="button"
-          disabled={paying || paymentLocked}
+          disabled={!paymentEnabled || paying || paymentLocked}
           onClick={handleLivePayment}
-          aria-label="Pay 0.005 USDC and scan live"
+          aria-label="Pay 0.005 USDC for one analysis snapshot"
           className="w-full cursor-pointer rounded-xl border border-emerald-400 bg-emerald-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {paying ? 'Processing payment...' : completed ? 'Report delivered' : paymentLocked ? 'Payment submitted — Do not retry' : 'Pay 0.005 USDC & Scan Live'}
+          {!paymentEnabled ? 'Payments temporarily unavailable' : paying ? 'Processing payment...' : completed ? 'Snapshot delivered' : paymentLocked ? 'Payment submitted — Do not retry' : 'Pay 0.005 USDC & Analyze'}
         </button>
       </div>
 
-      {completed && <button type="button" onClick={() => { localStorage.removeItem('marketscout_last_paid_report_v1'); setCompleted(false); setPaymentLocked(false); setPaymentMessage(''); }}>Start a new scan</button>}
       {paymentLocked && <a className="mt-3 block text-emerald-400 underline" href={recoveryId ? `/recover?reservation=${encodeURIComponent(recoveryId)}` : '/recover'}>Recover payment / report — no new payment</a>}
       {paymentMessage && (
         <p role="status" className="mt-3 text-sm text-amber-300">
@@ -424,8 +448,8 @@ export default function UsernameSearch({
           <AlertCircle size={18} className="shrink-0" />
           <p>
             No cached report for @{result.username}.
-            Live x402 analysis is not available yet.
-            No payment was made.
+            A live scan requires wallet authorization when enabled.
+            No payment was made by this lookup.
           </p>
         </div>
       )}

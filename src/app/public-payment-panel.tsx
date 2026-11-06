@@ -47,11 +47,11 @@ export default function PublicPaymentPanel() {
   return (
     <section className="mb-4 rounded-xl border border-emerald-400/20 bg-slate-900 p-4">
       <h2 className="text-xl font-bold text-white">
-        Live Scan Pricing
+        Analysis Snapshot Pricing
       </h2>
 
       <p className="mt-2 text-sm text-slate-400">
-        Pay per scan with USDC on Celo Mainnet.
+        Each payment buys one saved Instagram analysis snapshot with USDC on Celo Mainnet.
       </p>
 
       {loading && (
