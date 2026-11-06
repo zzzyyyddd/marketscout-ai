@@ -1,3 +1,4 @@
+import ConnectWallet from './connect-wallet';
 import MarketIntelligence from './market-intelligence';
 import snapshot from '../../data/instagram-snapshot.json';
 import { analyzeCompetitor, normalizeInstagram } from '@/lib/instagram';
@@ -13,7 +14,10 @@ export default function Home() {
             <div className="rounded-xl bg-emerald-400/15 p-3 text-emerald-400"><BarChart3 /></div>
             <div><h1 className="text-2xl font-bold">MarketScout <span className="text-emerald-400">AI</span></h1><p className="text-sm text-slate-400">Autonomous Market Intelligence</p></div>
           </div>
-          <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-xs text-amber-300">Saved Reports · Live Scanning Disabled</span>
+          <div className="flex flex-col items-end gap-3">
+            <ConnectWallet />
+            <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-xs text-amber-300">Saved Reports · Live Scanning Disabled</span>
+          </div>
         </header>
 
         <section className="py-12">

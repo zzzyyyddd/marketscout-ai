@@ -110,3 +110,30 @@ export async function settleVerifiedPayment(
     throw new Error('Verified payment settlement failed');
   }
 }
+
+
+export async function reserveMainnetAuthorization(metadata: {
+  payer: string;
+  nonce: string;
+  validAfter: bigint;
+  validBefore: bigint;
+}): Promise<string> {
+  const id = randomUUID();
+
+  const { data, error } = await getClient().rpc(
+    'marketscout_reserve_mainnet_authorization',
+    {
+      p_id: id,
+      p_payer: metadata.payer,
+      p_nonce: metadata.nonce,
+      p_valid_after: Number(metadata.validAfter),
+      p_valid_before: Number(metadata.validBefore),
+    },
+  );
+
+  if (error || data !== true) {
+    throw new Error('Atomic Mainnet reservation unavailable');
+  }
+
+  return id;
+}

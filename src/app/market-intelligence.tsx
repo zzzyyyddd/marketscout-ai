@@ -37,6 +37,18 @@ export default function MarketIntelligence({
         cachedUsername={initialReport.username}
         onSearchStarted={() => setVisible(false)}
         onReportUnavailable={() => setVisible(false)}
+        onLiveReportSelected={(report, txHash) => {
+          setSelected({
+            report,
+            mode: 'live_paid_scan',
+            network: 'celo',
+          });
+          setVisible(true);
+          console.info(
+            'Live report ready:',
+            txHash,
+          );
+        }}
         onReportSelected={(report, mode, network) => {
           setSelected({ report, mode, network });
           setVisible(true);
