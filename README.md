@@ -33,7 +33,7 @@ Next.js 16, React 19, TypeScript, Celo, x402, @celo/buy-core, Supabase PostgreSQ
 7. Data is normalized and analyzed
 8. Dashboard presents competitor insights
 
-This describes the payment workflow architecture. Production live payments are currently disabled.
+This describes the implemented payment workflow. A real Celo Mainnet payment has been verified, although successful report delivery remains unverified.
 
 ## Current Dashboard
 
@@ -61,10 +61,10 @@ This is testnet evidence, not a mainnet payment.
 - Mainnet USDC offer selected successfully by the SDK
 - Mainnet payment policy: 12/12 tests passed
 - Sepolia payment policy: 10/10 tests passed
-- Mainnet payment execution: not yet completed
-- Production live payments: disabled
+- Mainnet payment settlement: verified (0.005 USDC)
+- Mainnet report delivery: not completed for the verified transaction
 
-The mainnet policy is not yet connected to the live scan route.
+The public payment execution route integrates Mainnet payment verification and paid-report storage.
 
 ## Security
 
@@ -75,7 +75,7 @@ The mainnet policy is not yet connected to the live scan route.
 - Daily spending reservation cap: 0.05 USDC
 - Supabase RPC payment reservation and settlement
 - No automatic retry after an uncertain paid request
-- Live payments blocked in production
+- No automatic payment retry after uncertain settlement
 
 ## Local Development
 
@@ -117,15 +117,37 @@ Import the GitHub repository into Vercel as a Next.js project.
 
 The dashboard is statically generated and can be hosted without running a local laptop.
 
-Live payments remain disabled in production.
+Production includes the payment execution and report recovery routes.
 
 ## Current Limitations
 
 - Historical snapshot rather than live public scans
 - Descriptive analytics rather than LLM-generated insights
-- Mainnet policy implemented but not connected to the payment route
-- No completed mainnet payment transaction yet
+- Mainnet payment settlement verified, but its report was not delivered
+- Complete production payment-to-report delivery remains unverified
+- Legacy payments without stored reports cannot use the recovery workflow
 
 ## License
 
 Not yet specified.
+
+
+## Verified Celo Mainnet Payment
+
+A real payment of 0.005 USDC settled on Celo Mainnet.
+
+Transaction:
+https://celoscan.io/tx/0x96332992ef8c33f2e7fc1e2f2bd63cfd4cb0eba81fd90fe51b06f7340c916f31
+
+The associated report was not delivered. This transaction demonstrates payment settlement, not successful end-to-end delivery.
+
+## Paid Report Recovery
+
+Recovery page:
+https://marketscout-ai-three.vercel.app/recover
+
+The implemented workflow uses wallet ownership signatures, time-limited challenges, payment matching, and replay protection.
+
+Sandbox database integration tests passed all four checks: challenge issuance, wrong-wallet rejection, report retrieval, and replay rejection.
+
+Complete production HTTP recovery has not been verified end-to-end. Recovery requires a previously stored report.
