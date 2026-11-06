@@ -62,7 +62,9 @@ export default function UsernameSearch({
       status: 'error',
       message:
         'Payment confirmed, but the report is unavailable. ' +
-        'Do not pay again. Transaction: ' + result.txHash,
+        'Do not pay again. Reservation: ' + result.reservationId +
+        '. Transaction: ' + result.txHash +
+        '. Recovery: /recover',
     });
   }
 
@@ -182,7 +184,7 @@ export default function UsernameSearch({
       setPaymentMessage(
         response.status === 200
           ? 'Payment verified. Live report loaded.'
-          : 'Payment requires reconciliation. Do not pay again.'
+          : ''
       );
     } catch (cause) {
       setPaymentMessage(
