@@ -21,7 +21,7 @@ function json(body: unknown, status: number) {
 }
 
 export async function POST(request: Request) {
-  if (process.env.MARKETSCOUT_PUBLIC_PAYMENTS !== 'true') {
+  if (process.env.MARKETSCOUT_RECOVERY_ENABLED === 'false') {
     return json({ error: 'Payment recovery disabled' }, 503);
   }
 

@@ -10,6 +10,7 @@ import {
   buildRecoveryMessage,
   RECOVERY_CHALLENGE_TTL_SECONDS,
 } from '@/lib/paid-report-recovery-challenge';
+import { resumePaidResponse } from '@/lib/paid-response-store';
 import { isCompetitorReport } from '@/lib/report';
 
 
@@ -37,7 +38,7 @@ function hash(nonce: string) {
 }
 
 export async function POST(request: Request) {
-  if (process.env.MARKETSCOUT_PUBLIC_PAYMENTS !== 'true') {
+  if (process.env.MARKETSCOUT_RECOVERY_ENABLED === 'false') {
     return respond({ error: 'Recovery disabled' }, 503);
   }
 
@@ -160,7 +161,7 @@ export async function POST(request: Request) {
       }
 
       const { data, error } = await db.rpc(
-        'marketscout_redeem_recovery_challenge',
+        'marketscout_consume_processing_challenge',
         {
           p_nonce_hash: hash(body.nonce),
           p_reservation_id: reservationId,
@@ -171,11 +172,16 @@ export async function POST(request: Request) {
         },
       );
 
-      if (error || !isCompetitorReport(data)) {
+      if (error || data !== true) {
         return respond({ error: 'Report unavailable' }, 404);
       }
 
-      return respond({ status: 'recovered', report: data });
+      const result = await resumePaidResponse(reservationId);
+      if (result.status === 'settled' && isCompetitorReport(result.report)) return respond({ status: 'recovered', report: result.report });
+      // Older persisted reports remain recoverable after staging retention expires.
+      const saved = await db.rpc('marketscout_read_paid_report', { p_reservation_id: reservationId });
+      if (!saved.error && isCompetitorReport(saved.data)) return respond({ status: 'recovered', report: saved.data });
+      return respond({ error: 'Report processing remains unresolved. Do not pay again.', reservationId }, 202);
     }
 
     return respond({ error: 'Unknown action' }, 400);

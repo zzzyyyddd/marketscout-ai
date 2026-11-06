@@ -3,7 +3,6 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { payingFetch } from '@celo/buy-core/x402';
 import { isAuthorized } from '@/lib/auth';
 import {
-  PAYMENT_POLICY,
   validateInstagramUsername,
   validatePaymentDestination,
   validatePaymentRequirements,

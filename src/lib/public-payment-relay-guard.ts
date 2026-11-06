@@ -14,6 +14,7 @@ type PaymentAuthorization = {
 };
 
 export type PublicPaymentRequest = {
+  reservationId?: string;
   username: string;
   payer: string;
   paymentHeader: string;
@@ -43,7 +44,10 @@ export function validatePublicPaymentRequest(
     throw new Error('Invalid payment header');
   }
 
+  if (value.reservationId !== undefined && (typeof value.reservationId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.reservationId))) throw new Error('Invalid reservation ID');
+
   return {
+    ...(typeof value.reservationId === 'string' ? { reservationId: value.reservationId } : {}),
     username,
     payer: getAddress(value.payer),
     paymentHeader: value.paymentHeader,

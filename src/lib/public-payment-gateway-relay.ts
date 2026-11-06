@@ -1,4 +1,5 @@
 import 'server-only';
+import { parsePaymentResponse, readBoundedGatewayBody } from './payment-response-proof';
 
 import {
   MAINNET_PAYMENT_POLICY as POLICY,
@@ -53,43 +54,12 @@ export async function forwardPublicPaymentOnce(
     };
   }
 
-  const encodedProof =
-    response.headers.get('X-PAYMENT-RESPONSE');
-
-  if (!encodedProof || encodedProof.length > 8192) {
-    return {
-      status: 'unresolved',
-      reason: 'Payment proof missing',
-    };
-  }
-
-  let txHash: unknown;
+  let txHash: `0x${string}`;
+  try { txHash = parsePaymentResponse(response.headers); }
+  catch { return { status: 'unresolved', reason: 'Payment proof invalid or conflicting' }; }
 
   try {
-    const proof = JSON.parse(
-      Buffer.from(encodedProof, 'base64').toString('utf8'),
-    ) as Record<string, unknown>;
-
-    txHash = proof.transaction;
-  } catch {
-    return {
-      status: 'unresolved',
-      reason: 'Payment proof invalid',
-    };
-  }
-
-  if (
-    typeof txHash !== 'string' ||
-    !/^0x[0-9a-fA-F]{64}$/.test(txHash)
-  ) {
-    return {
-      status: 'unresolved',
-      reason: 'Transaction hash unavailable',
-    };
-  }
-
-  try {
-    const body: unknown = await response.json();
+    const body: unknown = await readBoundedGatewayBody(response);
 
     return {
       status: 'confirmed',

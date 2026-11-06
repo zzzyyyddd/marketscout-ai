@@ -113,13 +113,15 @@ export async function settleVerifiedPayment(
 
 
 export async function reserveMainnetAuthorization(metadata: {
+  reservationId?: string;
   payer: string;
   nonce: string;
   validAfter: bigint;
   validBefore: bigint;
   username: string;
 }): Promise<string> {
-  const id = randomUUID();
+  const id = metadata.reservationId ?? randomUUID();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) throw new Error('Invalid reservation ID');
 
   const { data, error } = await getClient().rpc(
     'marketscout_reserve_mainnet_report',

@@ -9,9 +9,6 @@ import {
 import {
   verifyPublicPaymentSignature,
 } from '@/lib/public-payment-signature';
-import {
-  reservePublicPaymentAuthorization,
-} from '@/lib/public-payment-ledger';
 
 import { executePublicPayment } from '@/lib/public-payment-orchestrator';
 
@@ -68,7 +65,7 @@ export async function POST(request: Request) {
 
     const validated = validatePublicPaymentRequest(body);
 
-    const authorization = await verifyPublicPaymentSignature(
+    await verifyPublicPaymentSignature(
       validated.paymentHeader,
       validated.payer
     );
@@ -88,6 +85,7 @@ export async function POST(request: Request) {
       validated.paymentHeader,
       validated.payer,
       validated.username,
+      validated.reservationId,
     );
 
     if (execution.status === 'unresolved') {

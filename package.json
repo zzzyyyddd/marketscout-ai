@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:offline": "node scripts/test-paid-workflow.cjs && node scripts/run-ts-tests.cjs scripts/test-scan-validation.ts && node scripts/run-ts-tests.cjs scripts/test-scan-adversarial.ts && node scripts/test-scan-route-mock.cjs"
   },
   "dependencies": {
     "@celo/buy-core": "0.8.5",

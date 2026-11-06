@@ -1,7 +1,6 @@
 import 'server-only';
 
-import { validateScanReport } from './scan-report-validation';
-import { storePaidReport } from './paid-report-store';
+import { storeGatewayResponse, resumePaidResponse, assertResponseStorageReady } from './paid-response-store';
 
 import {
   reservePublicPaymentAuthorization,
@@ -14,14 +13,6 @@ import {
 import {
   verifyPublicPaymentSignature,
 } from './public-payment-signature';
-
-import {
-  verifyAndSettlePayment,
-} from './payment-verified-settlement';
-
-import {
-  MAINNET_PAYMENT_POLICY as POLICY,
-} from './payment-mainnet-policy';
 
 export type PublicPaymentExecution =
   | {
@@ -45,6 +36,7 @@ export async function executePublicPayment(
   paymentHeader: string,
   payer: string,
   username: string,
+  reservationId?: string,
 ): Promise<PublicPaymentExecution> {
   const authorization =
     await verifyPublicPaymentSignature(paymentHeader, payer);
@@ -53,9 +45,6 @@ export async function executePublicPayment(
     throw new Error('Invalid authorization nonce');
   }
 
-  const validatedNonce =
-    authorization.nonce as `0x${string}`;
-
   // Atomic reservation stores the authorization evidence
   // before any request capable of charging the payer.
   const reservation =
@@ -63,7 +52,10 @@ export async function executePublicPayment(
       paymentHeader,
       payer,
       username,
+      reservationId,
     );
+
+  await assertResponseStorageReady(reservation.reservationId);
 
   const result =
     await forwardPublicPaymentOnce(paymentHeader, username);
@@ -82,73 +74,15 @@ export async function executePublicPayment(
     throw new Error('Missing gateway transaction hash');
   }
 
-  // A transaction hash is evidence to investigate, not proof
-  // that payment settled. Verify on-chain before updating ledger.
+  // Persist proof and bounded JSON before verification, processing, or final storage.
+  // A missing body remains missing; retry never obtains it by paying again.
   try {
-    await verifyAndSettlePayment(
-      reservation.reservationId,
-      txHash,
-      {
-        payer: authorization.payer,
-        recipient: authorization.recipient,
-        token: authorization.token,
-        amount: BigInt(authorization.amountAtomic),
-        nonce: validatedNonce,
-        validAfter: BigInt(authorization.validAfter),
-        validBefore: BigInt(authorization.validBefore),
-      },
-      POLICY.network,
+    await storeGatewayResponse(
+      reservation.reservationId, username, txHash,
+      result.status === 'confirmed' ? result.body : null,
     );
   } catch {
-    return {
-      status: 'unresolved',
-      reservationId: reservation.reservationId,
-      reason: 'On-chain settlement not verified',
-    };
+    return { status: 'unresolved', reservationId: reservation.reservationId, reason: 'Gateway response storage failed; do not pay again' };
   }
-
-  // Payment verified, but the gateway response may be missing.
-  // Do not charge again to recover a missing report.
-  if (result.status === 'unresolved') {
-    return {
-      status: 'settled_report_unavailable',
-      reservationId: reservation.reservationId,
-      txHash,
-    };
-  }
-
-  let report: ReturnType<typeof validateScanReport>;
-
-  try {
-    report = validateScanReport(result.body, username);
-  } catch {
-    return {
-      status: 'settled_report_unavailable',
-      reservationId: reservation.reservationId,
-      txHash,
-    };
-  }
-
-  // Persist the verified report before acknowledging delivery.
-  // A storage failure must never trigger another payment.
-  try {
-    await storePaidReport(
-      reservation.reservationId,
-      username,
-      report,
-    );
-  } catch {
-    return {
-      status: 'settled_report_unavailable',
-      reservationId: reservation.reservationId,
-      txHash,
-    };
-  }
-
-  return {
-    status: 'settled',
-    reservationId: reservation.reservationId,
-    txHash,
-    report,
-  };
+  return resumePaidResponse(reservation.reservationId);
 }

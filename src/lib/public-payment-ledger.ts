@@ -14,6 +14,7 @@ export async function reservePublicPaymentAuthorization(
   paymentHeader: string,
   expectedPayer: string,
   username: string,
+  reservationId?: string,
 ): Promise<{
   reservationId: string;
   payer: string;
@@ -33,7 +34,8 @@ export async function reservePublicPaymentAuthorization(
 
   // One atomic database operation: reserve and attach evidence.
   // Never forward payment to the gateway if reservation fails.
-  const reservationId = await reserveMainnetAuthorization({
+  const reservedId = await reserveMainnetAuthorization({
+    reservationId,
     payer: verified.payer,
     nonce: verified.nonce,
     validAfter: BigInt(verified.validAfter),
@@ -42,7 +44,7 @@ export async function reservePublicPaymentAuthorization(
   });
 
   return {
-    reservationId,
+    reservationId: reservedId,
     payer: verified.payer,
     nonce: verified.nonce,
   };

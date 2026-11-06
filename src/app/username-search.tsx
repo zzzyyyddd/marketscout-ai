@@ -43,7 +43,13 @@ export default function UsernameSearch({
   function handlePaymentResult(raw: unknown) {
     const result = validatePublicPaymentExecutionResult(raw);
 
+    const pending = JSON.parse(localStorage.getItem('marketscout_pending_payment_v1') ?? '{}');
+    localStorage.setItem('marketscout_pending_payment_v1', JSON.stringify({ ...pending, reservationId: result.reservationId, status: result.status }));
+    setRecoveryId(result.reservationId);
     if (result.status === 'settled') {
+      localStorage.setItem('marketscout_last_paid_report_v1', JSON.stringify({ reservationId: result.reservationId }));
+      localStorage.removeItem('marketscout_pending_payment_v1');
+      setCompleted(true);
       onLiveReportSelected?.(result.report, result.txHash);
       return;
     }
@@ -68,18 +74,33 @@ export default function UsernameSearch({
     });
   }
 
+  const [completed, setCompleted] = useState(false);
+  const [recoveryId, setRecoveryId] = useState('');
+  const operationRef = useRef(false);
   const [paying, setPaying] = useState(false);
-  const [paymentLocked, setPaymentLocked] = useState(false);
+  const [paymentLocked, setPaymentLocked] = useState(true);
   const [paymentMessage, setPaymentMessage] = useState('');
 
   useEffect(() => {
+    let active = true;
+    queueMicrotask(() => {
+    if (!active) return;
     try {
-      if (localStorage.getItem('marketscout_pending_payment_v1')) {
+      const previous = localStorage.getItem('marketscout_pending_payment_v1');
+      if (previous) {
+        setRecoveryId(JSON.parse(previous).reservationId ?? '');
         setPaymentLocked(true);
         setPaymentMessage(
           'Previous payment authorization may still be processing. ' +
           'Do not pay again until its status is verified.'
         );
+      } else {
+        const last = localStorage.getItem('marketscout_last_paid_report_v1');
+        if (last) {
+          setRecoveryId(JSON.parse(last).reservationId ?? '');
+          setCompleted(true);
+          setPaymentLocked(true);
+        } else setPaymentLocked(false);
       }
     } catch {
       setPaymentLocked(true);
@@ -87,10 +108,12 @@ export default function UsernameSearch({
         'Unable to verify previous payment state. Do not pay again.'
       );
     }
+    });
+    return () => { active = false; };
   }, []);
 
   async function handleLivePayment() {
-    if (paying || paymentLocked) return;
+    if (operationRef.current || paying || paymentLocked) return;
 
     try {
       if (localStorage.getItem('marketscout_pending_payment_v1')) {
@@ -116,10 +139,12 @@ export default function UsernameSearch({
       return;
     }
 
+    operationRef.current = true;
     setPaying(true);
     setPaymentMessage('');
 
     let authorizationCreated = false;
+    let operationId: string | undefined;
 
     try {
       const quoteResponse = await fetch('/api/payment/quote', {
@@ -143,7 +168,12 @@ export default function UsernameSearch({
 
       if (!confirmed) return;
 
+      const reservationId = crypto.randomUUID();
+      operationId = reservationId;
+      localStorage.setItem('marketscout_pending_payment_v1', JSON.stringify({ reservationId, username: target, status: 'signing' }));
+      setPaymentLocked(true);
       const payment = await buildBrowserPublicPayment(quote);
+      setRecoveryId(reservationId);
       authorizationCreated = true;
       setPaymentLocked(true);
 
@@ -151,9 +181,10 @@ export default function UsernameSearch({
         localStorage.setItem(
           'marketscout_pending_payment_v1',
           JSON.stringify({
+            reservationId,
             username: target,
             payer: payment.payer,
-            createdAt: Date.now(),
+            createdAt: new Date().getTime(),
             status: 'authorization_created',
           })
         );
@@ -168,6 +199,7 @@ export default function UsernameSearch({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          reservationId,
           username: target,
           payer: payment.payer,
           paymentHeader: payment.paymentHeader,
@@ -187,11 +219,19 @@ export default function UsernameSearch({
           : ''
       );
     } catch (cause) {
+      if (!authorizationCreated && operationId) {
+        try {
+          const current = JSON.parse(localStorage.getItem('marketscout_pending_payment_v1') ?? '{}');
+          if (current.reservationId === operationId) localStorage.removeItem('marketscout_pending_payment_v1');
+          setPaymentLocked(false);
+        } catch { setPaymentLocked(true); }
+      }
       setPaymentMessage(
         (cause instanceof Error ? cause.message : 'Payment failed') +
         (authorizationCreated ? ' Do not pay again.' : '')
       );
     } finally {
+      operationRef.current = false;
       setPaying(false);
     }
   }
@@ -355,10 +395,12 @@ export default function UsernameSearch({
           aria-label="Pay 0.005 USDC and scan live"
           className="w-full cursor-pointer rounded-xl border border-emerald-400 bg-emerald-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {paying ? 'Processing payment...' : paymentLocked ? 'Payment submitted — Do not retry' : 'Pay 0.005 USDC & Scan Live'}
+          {paying ? 'Processing payment...' : completed ? 'Report delivered' : paymentLocked ? 'Payment submitted — Do not retry' : 'Pay 0.005 USDC & Scan Live'}
         </button>
       </div>
 
+      {completed && <button type="button" onClick={() => { localStorage.removeItem('marketscout_last_paid_report_v1'); setCompleted(false); setPaymentLocked(false); setPaymentMessage(''); }}>Start a new scan</button>}
+      {paymentLocked && <a className="mt-3 block text-emerald-400 underline" href={recoveryId ? `/recover?reservation=${encodeURIComponent(recoveryId)}` : '/recover'}>Recover payment / report — no new payment</a>}
       {paymentMessage && (
         <p role="status" className="mt-3 text-sm text-amber-300">
           {paymentMessage}
