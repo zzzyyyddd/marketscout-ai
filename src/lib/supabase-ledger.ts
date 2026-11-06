@@ -117,17 +117,19 @@ export async function reserveMainnetAuthorization(metadata: {
   nonce: string;
   validAfter: bigint;
   validBefore: bigint;
+  username: string;
 }): Promise<string> {
   const id = randomUUID();
 
   const { data, error } = await getClient().rpc(
-    'marketscout_reserve_mainnet_authorization',
+    'marketscout_reserve_mainnet_report',
     {
       p_id: id,
       p_payer: metadata.payer,
       p_nonce: metadata.nonce,
       p_valid_after: Number(metadata.validAfter),
       p_valid_before: Number(metadata.validBefore),
+      p_username: metadata.username,
     },
   );
 

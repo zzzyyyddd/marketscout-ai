@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { validateScanReport } from './scan-report-validation';
+import { storePaidReport } from './paid-report-store';
 
 import {
   reservePublicPaymentAuthorization,
@@ -58,7 +59,11 @@ export async function executePublicPayment(
   // Atomic reservation stores the authorization evidence
   // before any request capable of charging the payer.
   const reservation =
-    await reservePublicPaymentAuthorization(paymentHeader, payer);
+    await reservePublicPaymentAuthorization(
+      paymentHeader,
+      payer,
+      username,
+    );
 
   const result =
     await forwardPublicPaymentOnce(paymentHeader, username);
@@ -124,10 +129,26 @@ export async function executePublicPayment(
     };
   }
 
+  // Persist the verified report before acknowledging delivery.
+  // A storage failure must never trigger another payment.
+  try {
+    await storePaidReport(
+      reservation.reservationId,
+      username,
+      report,
+    );
+  } catch {
+    return {
+      status: 'settled_report_unavailable',
+      reservationId: reservation.reservationId,
+      txHash,
+    };
+  }
+
   return {
     status: 'settled',
     reservationId: reservation.reservationId,
-    txHash: result.txHash,
+    txHash,
     report,
   };
 }

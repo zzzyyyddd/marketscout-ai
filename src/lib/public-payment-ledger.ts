@@ -13,6 +13,7 @@ import {
 export async function reservePublicPaymentAuthorization(
   paymentHeader: string,
   expectedPayer: string,
+  username: string,
 ): Promise<{
   reservationId: string;
   payer: string;
@@ -37,6 +38,7 @@ export async function reservePublicPaymentAuthorization(
     nonce: verified.nonce,
     validAfter: BigInt(verified.validAfter),
     validBefore: BigInt(verified.validBefore),
+    username: username.trim().toLowerCase(),
   });
 
   return {
