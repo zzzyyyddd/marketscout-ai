@@ -106,6 +106,20 @@ const { resumePaidResponse } = load('src/lib/paid-response-store.ts');
 const { parsePaymentResponse, readBoundedGatewayBody } = load('src/lib/payment-response-proof.ts');
 function reset(mode) { staged = stored = reserved = undefined; failure = mode; gatewayCalls = 0; stageCalls = 0; events = []; }
 (async () => {
+  const uiState = load('src/lib/payment-ui-state.ts');
+  assert.equal(uiState.paymentButtonLabel({ enabled: true, paying: true, locked: true, completed: false, stateChecked: true, step: 'signing' }), 'Waiting for wallet authorization…');
+  assert.equal(uiState.paymentButtonLabel({ enabled: true, paying: false, locked: false, completed: false, stateChecked: true, step: 'signing' }), 'Wallet authorization not submitted — resume');
+  assert.equal(uiState.canSafelyResumePayment('signing'), true);
+  assert.equal(uiState.canSafelyResumePayment('authorization_ready_v2'), true);
+  assert.equal(uiState.canSafelyResumePayment('authorization_created'), false, 'older signed state is ambiguous and must remain locked');
+  assert.equal(uiState.canSafelyResumePayment('submitting'), false);
+  assert.equal(uiState.paymentButtonLabel({ enabled: true, paying: false, locked: true, completed: false, stateChecked: false, step: null }), 'Checking saved payment state…');
+  assert.equal(uiState.canOfferPaidReportRecovery('signing'), false);
+  assert.equal(uiState.canOfferPaidReportRecovery('submitting'), true);
+  assert.equal(uiState.paymentButtonLabel({ enabled: true, paying: false, locked: true, completed: false, stateChecked: true, step: 'submitting' }), 'Payment request processing — do not retry');
+  assert.equal(uiState.paymentButtonLabel({ enabled: true, paying: false, locked: true, completed: false, stateChecked: true, step: 'authorization_created' }), 'Payment status uncertain — do not retry');
+  console.log('PASS payment UI never labels pre-submission wallet authorization as submitted');
+
   for (const mode of ['success', 'slow-success', 'proof', 'body-conflict', 'timeout', 'settlement', 'stage', 'store']) {
     reset(mode);
     const result = await executePublicPayment('never-a-real-signature', payer, 'nike', id);

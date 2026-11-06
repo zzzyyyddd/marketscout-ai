@@ -11,6 +11,7 @@ import {
 import PublicPaymentPanel from './public-payment-panel';
 import { buildBrowserPublicPayment } from '@/lib/build-browser-public-payment';
 import { validatePublicPaymentQuote } from '@/lib/public-payment-validation';
+import { canOfferPaidReportRecovery, canSafelyResumePayment, paymentButtonLabel, type PendingPaymentStep } from '@/lib/payment-ui-state';
 
 type SearchResult =
   | { status: 'cached'; username: string; historical: boolean }
@@ -48,6 +49,7 @@ export default function UsernameSearch({
     }
 
     setRecoveryId(result.reservationId);
+    setPaymentStep(result.status);
     // Storage can fail after the paid response arrives. Keep delivery and the
     // recovery link available even when the browser receipt cannot be updated.
     try {
@@ -89,6 +91,8 @@ export default function UsernameSearch({
   const operationRef = useRef(false);
   const [paying, setPaying] = useState(false);
   const [paymentLocked, setPaymentLocked] = useState(true);
+  const [paymentStateChecked, setPaymentStateChecked] = useState(false);
+  const [paymentStep, setPaymentStep] = useState<PendingPaymentStep>(null);
   const [paymentMessage, setPaymentMessage] = useState('');
   const [paymentEnabled, setPaymentEnabled] = useState(false);
 
@@ -111,12 +115,16 @@ export default function UsernameSearch({
     try {
       const previous = localStorage.getItem('marketscout_pending_payment_v1');
       if (previous) {
-        setRecoveryId(JSON.parse(previous).reservationId ?? '');
-        setPaymentLocked(true);
-        setPaymentMessage(
-          'Previous payment authorization may still be processing. ' +
-          'Do not pay again until its status is verified.'
-        );
+        const pending = JSON.parse(previous) as { reservationId?: string; username?: string; status?: string };
+        setRecoveryId(pending.reservationId ?? '');
+        setPaymentStep((pending.status ?? null) as PendingPaymentStep);
+        if (canSafelyResumePayment(pending.status)) {
+          setPaymentLocked(false);
+          setPaymentMessage('No payment request was submitted. Resume this same request; no charge can have been initiated from this saved state.');
+        } else {
+          setPaymentLocked(true);
+          setPaymentMessage('A payment request may have been submitted. Do not pay again; check its saved report or recovery status.');
+        }
       } else {
         const last = localStorage.getItem('marketscout_last_paid_report_v1');
         if (last) {
@@ -125,8 +133,11 @@ export default function UsernameSearch({
           setPaymentLocked(true);
         } else setPaymentLocked(false);
       }
+      setPaymentStateChecked(true);
     } catch {
+      setPaymentStep('unresolved');
       setPaymentLocked(true);
+      setPaymentStateChecked(true);
       setPaymentMessage(
         'Unable to verify previous payment state. Do not pay again.'
       );
@@ -139,13 +150,13 @@ export default function UsernameSearch({
     if (!paymentEnabled) return;
     if (operationRef.current || paying || paymentLocked) return;
 
+    let previousPending: { reservationId?: string; username?: string; status?: string } | null = null;
     try {
-      if (localStorage.getItem('marketscout_pending_payment_v1')) {
+      const stored = localStorage.getItem('marketscout_pending_payment_v1');
+      if (stored) previousPending = JSON.parse(stored);
+      if (previousPending && !canSafelyResumePayment(previousPending.status)) {
         setPaymentLocked(true);
-        setPaymentMessage(
-          'Previous payment authorization exists. ' +
-          'Do not pay again until its status is verified.'
-        );
+        setPaymentMessage('A payment request may have been submitted. Do not pay again until its status is verified.');
         return;
       }
     } catch {
@@ -162,12 +173,17 @@ export default function UsernameSearch({
       setPaymentMessage('Enter a valid Instagram username.');
       return;
     }
+    if (previousPending && previousPending.username !== target) {
+      setPaymentMessage('Resume the existing request for @' + (previousPending.username ?? 'the saved username') + ' first.');
+      return;
+    }
 
     operationRef.current = true;
     setPaying(true);
     setPaymentMessage('');
 
     let authorizationCreated = false;
+    let executionRequestStarted = false;
     let operationId: string | undefined;
 
     try {
@@ -194,23 +210,26 @@ export default function UsernameSearch({
       if (!confirmed) return;
 
       const reservationId = quote.controlledTest.reservationId;
-      operationId = reservationId;
-      localStorage.setItem('marketscout_pending_payment_v1', JSON.stringify({ reservationId, username: target, status: 'signing' }));
+      const activeReservationId = previousPending?.reservationId ?? reservationId;
+      operationId = activeReservationId;
+      localStorage.setItem('marketscout_pending_payment_v1', JSON.stringify({ reservationId: activeReservationId, username: target, status: 'signing' }));
+      setPaymentStep('signing');
       setPaymentLocked(true);
-      setRecoveryId(reservationId);
+      setRecoveryId(activeReservationId);
       const payment = await buildBrowserPublicPayment(quote, target);
       authorizationCreated = true;
       setPaymentLocked(true);
+      setPaymentStep('authorization_ready_v2');
 
       try {
         localStorage.setItem(
           'marketscout_pending_payment_v1',
           JSON.stringify({
-            reservationId,
+            reservationId: activeReservationId,
             username: target,
             payer: payment.payer,
             createdAt: new Date().getTime(),
-            status: 'authorization_created',
+            status: 'authorization_ready_v2',
           })
         );
       } catch {
@@ -220,11 +239,23 @@ export default function UsernameSearch({
         );
       }
 
+      // Persist this conservative state before the request. From this point a
+      // network interruption can no longer be treated as a pre-payment retry.
+      localStorage.setItem('marketscout_pending_payment_v1', JSON.stringify({
+        reservationId: activeReservationId,
+        username: target,
+        payer: payment.payer,
+        createdAt: new Date().getTime(),
+        status: 'submitting',
+      }));
+      setPaymentStep('submitting');
+      executionRequestStarted = true;
+
       const response = await fetch('/api/payment/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          reservationId,
+          reservationId: activeReservationId,
           username: target,
           payer: payment.payer,
           paymentHeader: payment.paymentHeader,
@@ -237,7 +268,7 @@ export default function UsernameSearch({
         throw new Error('Payment execution failed. Do not pay again.');
       }
 
-      handlePaymentResult(data, reservationId, target);
+      handlePaymentResult(data, activeReservationId, target);
       setPaymentMessage(
         response.status === 200
           ? 'Payment verified. Paid analysis snapshot loaded.'
@@ -248,12 +279,19 @@ export default function UsernameSearch({
         try {
           const current = JSON.parse(localStorage.getItem('marketscout_pending_payment_v1') ?? '{}');
           if (current.reservationId === operationId) localStorage.removeItem('marketscout_pending_payment_v1');
+          setPaymentStep(null);
           setPaymentLocked(false);
-        } catch { setPaymentLocked(true); }
+        } catch { setPaymentStep('unresolved'); setPaymentLocked(true); }
+      } else if (authorizationCreated && !executionRequestStarted) {
+        // Signing completed, but the durable pre-request marker was not written,
+        // so /api/payment/execute has not been called and this is safe to resume.
+        setPaymentLocked(false);
       }
       setPaymentMessage(
-        (cause instanceof Error ? cause.message : 'Payment failed') +
-        (authorizationCreated ? ' Do not pay again.' : '')
+        authorizationCreated && !executionRequestStarted
+          ? 'No payment request was submitted. Resume this same reservation when ready.'
+          : (cause instanceof Error ? cause.message : 'Payment failed') +
+            (authorizationCreated ? ' Do not pay again.' : '')
       );
     } finally {
       operationRef.current = false;
@@ -420,11 +458,11 @@ export default function UsernameSearch({
           aria-label="Pay 0.005 USDC for one analysis snapshot"
           className="w-full cursor-pointer rounded-xl border border-emerald-400 bg-emerald-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {!paymentEnabled ? 'Payments temporarily unavailable' : paying ? 'Processing payment...' : completed ? 'Snapshot delivered' : paymentLocked ? 'Payment submitted — Do not retry' : 'Pay 0.005 USDC & Analyze'}
+          {paymentButtonLabel({ enabled: paymentEnabled, paying, locked: paymentLocked, completed, stateChecked: paymentStateChecked, step: paymentStep })}
         </button>
       </div>
 
-      {paymentLocked && <a className="mt-3 block text-emerald-400 underline" href={recoveryId ? `/recover?reservation=${encodeURIComponent(recoveryId)}` : '/recover'}>Recover payment / report — no new payment</a>}
+      {canOfferPaidReportRecovery(paymentStep) && <a className="mt-3 block text-emerald-400 underline" href={recoveryId ? `/recover?reservation=${encodeURIComponent(recoveryId)}` : '/recover'}>Recover payment / report — no new payment</a>}
       {paymentMessage && (
         <p role="status" className="mt-3 text-sm text-amber-300">
           {paymentMessage}
