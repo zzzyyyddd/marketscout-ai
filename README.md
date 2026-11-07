@@ -1,164 +1,89 @@
 # MarketScout AI
 
-**Onchain-paid social intelligence powered by Celo and x402.**
+**Pay once for an Instagram analytics snapshot. Recover the same report later.**
 
-Built for **Agents on Open Rails Hackathon 2026 — Build with buy**.
+MarketScout AI is a Celo and x402 demonstration built for the **Agents on Open Rails Hackathon 2026 — Build with buy**. A 0.005 USDC payment purchases one analysis snapshot for one Instagram username. The application retrieves profile data through an x402 gateway, generates descriptive analytics, and saves the report for wallet-authenticated recovery without a second payment. A new analysis is a separate purchase and may produce different data.
 
-MarketScout AI demonstrates an agent-oriented workflow for purchasing external social data through x402, analyzing competitor content, and presenting actionable performance insights.
+- **App:** https://marketscout-ai-three.vercel.app
+- **Recovery:** https://marketscout-ai-three.vercel.app/recover
+- **Source:** https://github.com/zzzyyyddd/marketscout-ai
+- **Read-only judge guide:** [docs/JUDGE_GUIDE.md](docs/JUDGE_GUIDE.md)
+- **Submission package:** [description](docs/submission/README.md) · [two-minute demo script](docs/submission/demo-script.md) · [evidence](docs/submission/evidence.md)
 
-## Features
+## Judge quick start
 
-- Instagram competitor profile intelligence
-- Interactive explorer with filtering and sorting
-- Engagement metrics and top-performing posts
-- Video versus non-video comparison
-- x402 integration using `@celo/buy-core`
-- Celo USDC payment support
-- Strict payment network, token, recipient, and URL validation
-- Per-request and daily spending limits
-- Supabase-backed payment accounting
+1. Open the [live app](https://marketscout-ai-three.vercel.app) and explore the public historical dashboard and post filters. No wallet or USDC is required.
+2. Open the [recovery page](https://marketscout-ai-three.vercel.app/recover) to inspect the flow. The operator's paid `@nike` report can only be recovered by its purchasing wallet.
+3. Review the [evidence matrix](#evidence), [architecture](docs/ARCHITECTURE.md) and [security model](docs/SECURITY.md). The [judge guide](docs/JUDGE_GUIDE.md) explains the complete three-minute path.
 
-## Technology
+New payments are restricted to the completed controlled test; general public charging is not enabled. The landing-page historical example is distinct from the paid `@nike` snapshot.
 
-Next.js 16, React 19, TypeScript, Celo, x402, @celo/buy-core, Supabase PostgreSQL, and Vercel.
+## What the dashboard shows
 
-## Architecture
+The report displays the saved profile, followers, following, generation timestamp and the available sample. When posts are available, it also displays engagement, top posts, content mix and an interactive explorer. These are deterministic descriptive statistics, not LLM-generated predictions or live monitoring. Missing post data is shown as unavailable rather than zero engagement.
 
-1. Request Instagram competitor data
-2. Gateway responds with HTTP 402
-3. SDK selects an allowed Celo USDC payment offer
-4. Payment policy validates network, token, recipient, URL, and amount
-5. Spending ledger reserves the payment budget
-6. Payment authorization enables access to the data
-7. Data is normalized and analyzed
-8. Dashboard presents competitor insights
+The public landing page also contains an existing historical demonstration snapshot. It is not the newly purchased `@nike` report.
 
-This describes the implemented payment workflow. A real Celo Mainnet payment has been verified, although successful report delivery remains unverified.
+## How the purchase and recovery work
 
-## Current Dashboard
+1. The user enters an Instagram username and requests a quote. The backend validates the gateway's x402 v2 offer against the permitted Celo Mainnet network, USDC token, recipient, amount and resource.
+2. The wallet signs an EIP-712 USDC `TransferWithAuthorization` for **0.005 USDC** on Celo Mainnet (chain ID **42220**). A signature alone is not settlement.
+3. The backend checks the authorization and controlled release scope, reserves the request and forwards the payment to the gateway once. The ledger binds the reservation to the payer, authorization and username, with replay and duplicate protections.
+4. The backend stages the gateway response and transaction evidence, verifies settlement against Celo transaction and receipt data, generates a report from the returned Instagram data, and saves it. Success requires a saved-report readback.
+5. Recovery uses a time-limited, domain-bound wallet ownership challenge. The same wallet signs a recovery message; the backend returns the saved snapshot and its original `generatedAt` timestamp without fetching Instagram again or charging again.
 
-The dashboard uses a historical x402 sandbox snapshot containing 12 Instagram posts.
+If delivery is uncertain, preserve the reservation and use recovery rather than initiating another payment. Gateway redelivery after a lost paid response is not established; a paid request whose response is lost may remain unrecoverable.
 
-Users can explore engagement statistics, compare content formats, sort posts, and inspect caption previews.
+## Evidence
 
-Current analytics are deterministic descriptive statistics, not LLM-generated analysis.
+| Case | Evidence | What it shows | Limits |
+| --- | --- | --- | --- |
+| Celo Sepolia | [Testnet transaction](https://celo-sepolia.blockscout.com/tx/0xe02aa5ce58a261683e062d22c62f67c567f0aead9617f073ff8dea73609f7f92) | Historical testnet payment; the explorer reports success. | Testnet USDC; not the November 7 purchase. |
+| November 6 Celo Mainnet | [Earlier Mainnet transaction](https://celoscan.io/tx/0x96332992ef8c33f2e7fc1e2f2bd63cfd4cb0eba81fd90fe51b06f7340c916f31) | A read-only Celo RPC check accepted the 0.005 USDC transaction, receipt, calldata and logs at block 82034610. | Its report was not delivered; no reservation or response binding was verified. |
+| November 7 controlled test | [Operator-reported evidence](docs/submission/evidence.md) | The operator reports a 0.005 USDC payment, `@nike` report delivery and recovery of the same snapshot without another payment. | The transaction hash and response-only receipt were not supplied for independent verification. |
 
-## Verified Celo Sepolia x402 Payment
+The operator reports that one **0.005 USDC** payment for `@nike` delivered a report and that wallet-authenticated recovery returned the same saved snapshot without another payment. The original generation timestamp was **2026-11-07T12:39:39.884Z**. The recovered snapshot contained **290,817,931 followers**, **269 following** and **0 sampled posts**. Post-level engagement and content analysis are unavailable for that snapshot. The operator also reports testing the updated recovery dashboard in production after commit `e95e777`.
 
-A real x402 request succeeded on Celo Sepolia.
+These are operator-reported observations; the transaction hash and response-only receipt have not been supplied for independent inspection. See [test evidence and limits](docs/submission/evidence.md).
 
-- Network: Celo Sepolia
-- Asset: testnet USDC
-- Payment: 0.005 USDC
-- HTTP response: 200
-- Transaction: https://celo-sepolia.blockscout.com/tx/0xe02aa5ce58a261683e062d22c62f67c567f0aead9617f073ff8dea73609f7f92
+### Screenshots
 
-This is testnet evidence, not a mainnet payment.
+No real screenshots are currently present in the repository. The numbered [evidence gallery](docs/screenshots/README.md) lists the exact filenames for genuine captures; it does not substitute mock data for evidence.
 
-## Celo Mainnet Readiness
+## Availability and safety
 
-- Mainnet HTTP 402 gateway offer discovered
-- Mainnet USDC offer selected successfully by the SDK
-- Mainnet payment policy: 12/12 tests passed
-- Sepolia payment policy: 10/10 tests passed
-- Mainnet payment settlement: verified (0.005 USDC)
-- Mainnet report delivery: not completed for the verified transaction
+The app and its non-payment features are public. **General public charging is not enabled.** The current controlled gate is configured for one wallet, `nike` and the single fixed reservation used for the test; a successful purchase consumes that reservation. Judges should not expect to purchase a new report or recover the operator's report with a different wallet. No payment or wallet signature is needed to explore the public historical demonstration.
 
-The public payment execution route integrates Mainnet payment verification and paid-report storage.
+The deployed server checks the payer, username and reservation before forwarding a payment. Supabase-backed reservation and settlement checks provide replay protection and a daily spending cap. Recovery requires the purchasing wallet. Legacy payments without a saved report cannot be recovered as snapshots.
 
-## Security
+## Architecture and technology
 
-- Environment variables for sensitive configuration
-- Local `.env.local` excluded from Git
-- Strict payment destination and asset allowlists
-- Maximum payment per request: 0.005 USDC
-- Daily spending reservation cap: 0.05 USDC
-- Supabase RPC payment reservation and settlement
-- No automatic retry after an uncertain paid request
-- No automatic payment retry after uncertain settlement
+Next.js 16 and React 19 provide the dashboard and API routes; TypeScript implements the x402 flow with `@celo/buy-core` and viem. Celo Mainnet USDC settles payment, Supabase PostgreSQL stores payment evidence and reports, and Vercel hosts the application. The Instagram gateway supplies the profile data.
 
-## Local Development
+Read the [architecture](docs/ARCHITECTURE.md) for trust boundaries and the [security model](docs/SECURITY.md) for failure handling and reporting guidance. No independent security audit is claimed.
+
+## Run locally
 
 Requirements: Node.js 22 or newer.
 
-Install dependencies:
+```sh
+npm ci
+npm run dev
+```
 
-    npm ci
+Open http://localhost:3000. The historical demonstration does not require payment credentials. Production payment and database credentials are server-side and must never be committed.
 
-Start the development server:
+Focused checks:
 
-    npm run dev
+```sh
+node scripts/test-report-dashboard.cjs
+node scripts/test-paid-workflow.cjs
+npx tsc --noEmit
+npx next build --webpack
+```
 
-Open http://localhost:3000.
-
-The snapshot dashboard does not require live payment credentials.
-
-## Tests
-
-Production build:
-
-    npm run build
-
-If this runner blocks Turbopack CSS-worker port binding (`Operation not permitted`),
-use the supported Webpack alternative without changing application configuration:
-
-    npx next build --webpack
-
-The gate in `src/lib/public-payment-readiness.ts` defaults closed. A controlled test
-requires both enable flags plus an approved wallet, username and fixed reservation
-UUID. Recovery is independent. See [the deployment/test procedure](docs/controlled-mainnet-test.md).
-Each payment buys an immutable analysis snapshot; recovery returns the saved report
-and its original generation timestamp without fetching Instagram again.
-
-Payment policy tests:
-
-    node scripts/test-payment-policy.mjs
-    node scripts/test-mainnet-payment-policy.mjs
-
-SDK selection tests:
-
-    node scripts/test-x402-selection.mjs
-    node scripts/test-mainnet-selection.mjs
-
-The mainnet selection test obtains a free HTTP 402 challenge without making a payment.
-
-## Deployment
-
-Import the GitHub repository into Vercel as a Next.js project.
-
-The dashboard is statically generated and can be hosted without running a local laptop.
-
-Production includes the payment execution and report recovery routes.
-
-## Current Limitations
-
-- Historical snapshot rather than live public scans
-- Descriptive analytics rather than LLM-generated insights
-- Mainnet payment settlement verified, but its report was not delivered
-- Complete production payment-to-report delivery remains unverified
-- Legacy payments without stored reports cannot use the recovery workflow
+The workflow tests use mocked payment, wallet and database dependencies; they do not prove a real payment or report delivery. The Webpack build is also the configured Vercel build path. See the [controlled test procedure](docs/controlled-mainnet-test.md) for operational details.
 
 ## License
 
-Not yet specified.
-
-
-## Verified Celo Mainnet Payment
-
-A real payment of 0.005 USDC settled on Celo Mainnet.
-
-Transaction:
-https://celoscan.io/tx/0x96332992ef8c33f2e7fc1e2f2bd63cfd4cb0eba81fd90fe51b06f7340c916f31
-
-The associated report was not delivered. This transaction demonstrates payment settlement, not successful end-to-end delivery.
-
-## Paid Report Recovery
-
-Recovery page:
-https://marketscout-ai-three.vercel.app/recover
-
-The implemented workflow uses wallet ownership signatures, time-limited challenges, payment matching, and replay protection.
-
-Sandbox database integration tests passed all four checks: challenge issuance, wrong-wallet rejection, report retrieval, and replay rejection.
-
-Complete production HTTP recovery has not been verified end-to-end. Recovery requires a previously stored report.
+[MIT](LICENSE).

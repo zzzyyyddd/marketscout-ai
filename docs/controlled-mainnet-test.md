@@ -1,6 +1,9 @@
 # One controlled Celo Mainnet snapshot test
 
-Preparation is authorized. No payment has been executed and E2E is not yet proven.
+This is the preparation procedure used for the controlled test. The operator
+subsequently reported successful Mainnet report delivery and authenticated recovery;
+see [the test evidence](submission/evidence.md). Do not repeat the payment using
+the same reservation.
 The operator accepted the possible loss of 0.005 USDC if the gateway result is lost.
 Each purchase is one immutable saved snapshot, not a subscription or an automatically
 refreshed report. Public launch remains outside this controlled test.
@@ -46,7 +49,7 @@ or NEXT_PUBLIC payment enable flag is required for this browser-authorized path.
 The newly introduced controlled-test flag defaults false, so the old public enable
 flag alone cannot open the new release. No environment setting was changed during
 preparation. Do not change the fixed UUID to bypass a consumed/uncertain test slot.
-That UUID has only been generated locally; no reservation was created for it.
+The operator reports that this UUID was used for the completed controlled purchase.
 
 `vercel.json` selects Next.js and `npx next build --webpack`. Use the current project
 root (the directory containing package.json), `npm ci`, and the default Next output.
