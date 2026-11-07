@@ -119,6 +119,24 @@ function reset(mode) { staged = stored = reserved = undefined; failure = mode; g
   assert.equal(uiState.paymentButtonLabel({ enabled: true, paying: false, locked: true, completed: false, stateChecked: true, step: 'submitting' }), 'Payment request processing — do not retry');
   assert.equal(uiState.paymentButtonLabel({ enabled: true, paying: false, locked: true, completed: false, stateChecked: true, step: 'authorization_created' }), 'Payment status uncertain — do not retry');
   console.log('PASS payment UI never labels pre-submission wallet authorization as submitted');
+  const values = new Map();
+  const storage = { get length() { return values.size; }, key: i => [...values.keys()][i] ?? null, getItem: key => values.get(key) ?? null };
+  const legacy = JSON.stringify({ username: 'ilyayahya', status: 'authorization_created', createdAt: 1793935352081 });
+  values.set('marketscout_pending_payment_v1', legacy);
+  assert.equal(uiState.findPendingPayment(storage, 'nike', id), null, 'unrelated historical purchase must not block the controlled purchase');
+  const scopedKey = uiState.pendingPaymentKey(id);
+  values.set(scopedKey, JSON.stringify({ username: 'nike', reservationId: id, status: 'submitting' }));
+  assert.equal(uiState.findPendingPayment(storage, 'nike', id).status, 'submitting');
+  assert.equal(values.get('marketscout_pending_payment_v1'), legacy, 'historical evidence must remain untouched');
+  values.delete(scopedKey);
+  values.set('marketscout_pending_payment_v1', JSON.stringify({ username: 'nike', status: 'authorization_created' }));
+  assert.equal(uiState.findPendingPayment(storage, 'nike', id).status, 'authorization_created', 'same username with unknown reservation stays locked');
+  values.set('marketscout_pending_payment_v1', JSON.stringify({ username: 'other', reservationId: id, status: 'unresolved' }));
+  assert.equal(uiState.findPendingPayment(storage, 'nike', id).status, 'unresolved', 'same reservation stays locked');
+  values.set('marketscout_pending_payment_v1', JSON.stringify({ username: 'nike', reservationId: id, status: 'signing' }));
+  values.set(scopedKey, JSON.stringify({ username: 'nike', reservationId: id, status: 'unresolved' }));
+  assert.equal(uiState.findPendingPayment(storage, 'nike', id).status, 'unresolved', 'uncertain state takes priority over pre-signing state');
+  console.log('PASS separate historical marker and matching payment locks');
 
   for (const mode of ['success', 'slow-success', 'proof', 'body-conflict', 'timeout', 'settlement', 'stage', 'store']) {
     reset(mode);

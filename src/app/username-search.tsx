@@ -11,7 +11,7 @@ import {
 import PublicPaymentPanel from './public-payment-panel';
 import { buildBrowserPublicPayment } from '@/lib/build-browser-public-payment';
 import { validatePublicPaymentQuote } from '@/lib/public-payment-validation';
-import { canOfferPaidReportRecovery, canSafelyResumePayment, paymentButtonLabel, type PendingPaymentStep } from '@/lib/payment-ui-state';
+import { canOfferPaidReportRecovery, canSafelyResumePayment, findPendingPayment, paidReportKey, pendingPaymentKey, paymentButtonLabel, type PendingPaymentStep } from '@/lib/payment-ui-state';
 
 type SearchResult =
   | { status: 'cached'; username: string; historical: boolean }
@@ -53,13 +53,14 @@ export default function UsernameSearch({
     // Storage can fail after the paid response arrives. Keep delivery and the
     // recovery link available even when the browser receipt cannot be updated.
     try {
-      const pending = JSON.parse(localStorage.getItem('marketscout_pending_payment_v1') ?? '{}');
-      localStorage.setItem('marketscout_pending_payment_v1', JSON.stringify({ ...pending, reservationId: result.reservationId, status: result.status }));
+      const key = pendingPaymentKey(result.reservationId);
+      const pending = JSON.parse(localStorage.getItem(key) ?? '{}');
+      localStorage.setItem(key, JSON.stringify({ ...pending, reservationId: result.reservationId, status: result.status }));
     } catch { /* The pre-payment receipt and visible recovery ID remain available. */ }
     if (result.status === 'settled') {
       try {
-        localStorage.setItem('marketscout_last_paid_report_v1', JSON.stringify({ reservationId: result.reservationId }));
-        localStorage.removeItem('marketscout_pending_payment_v1');
+        localStorage.setItem(paidReportKey(result.reservationId), JSON.stringify({ reservationId: result.reservationId }));
+        localStorage.removeItem(pendingPaymentKey(result.reservationId));
       } catch { /* A receipt failure must not hide a durably stored report. */ }
       setCompleted(true);
       onLiveReportSelected?.(result.report, result.txHash);
@@ -95,6 +96,7 @@ export default function UsernameSearch({
   const [paymentStep, setPaymentStep] = useState<PendingPaymentStep>(null);
   const [paymentMessage, setPaymentMessage] = useState('');
   const [paymentEnabled, setPaymentEnabled] = useState(false);
+  const [controlledScope, setControlledScope] = useState<{ username: string; reservationId: string } | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -102,37 +104,42 @@ export default function UsernameSearch({
       .then(async response => {
         if (!response.ok) return;
         const quote = validatePublicPaymentQuote(await response.json());
-        if (!controller.signal.aborted) setPaymentEnabled(quote.signingEnabled);
+        if (!controller.signal.aborted) {
+          setControlledScope(quote.controlledTest);
+          setPaymentEnabled(quote.signingEnabled);
+        }
       })
       .catch(() => { /* Remain disabled if readiness cannot be verified. */ });
     return () => controller.abort();
   }, []);
 
   useEffect(() => {
+    if (!controlledScope) return;
     let active = true;
     queueMicrotask(() => {
     if (!active) return;
     try {
-      const previous = localStorage.getItem('marketscout_pending_payment_v1');
-      if (previous) {
-        const pending = JSON.parse(previous) as { reservationId?: string; username?: string; status?: string };
+      const pending = findPendingPayment(localStorage, controlledScope.username, controlledScope.reservationId);
+      const scopedLastRaw = localStorage.getItem(paidReportKey(controlledScope.reservationId));
+      const scopedLast = scopedLastRaw ? JSON.parse(scopedLastRaw) : null;
+      const legacyLast = JSON.parse(localStorage.getItem('marketscout_last_paid_report_v1') ?? '{}');
+      if (scopedLast && scopedLast.reservationId?.toLowerCase() !== controlledScope.reservationId.toLowerCase()) throw new Error('Invalid paid report marker');
+      if (scopedLast || legacyLast.reservationId?.toLowerCase() === controlledScope.reservationId.toLowerCase()) {
+        setRecoveryId(controlledScope.reservationId);
+        setCompleted(true);
+        setPaymentStep('settled');
+        setPaymentLocked(true);
+      } else if (pending) {
         setRecoveryId(pending.reservationId ?? '');
         setPaymentStep((pending.status ?? null) as PendingPaymentStep);
-        if (canSafelyResumePayment(pending.status)) {
+        if (canSafelyResumePayment(pending.status) && pending.reservationId?.toLowerCase() === controlledScope.reservationId.toLowerCase()) {
           setPaymentLocked(false);
           setPaymentMessage('No payment request was submitted. Resume this same request; no charge can have been initiated from this saved state.');
         } else {
           setPaymentLocked(true);
           setPaymentMessage('A payment request may have been submitted. Do not pay again; check its saved report or recovery status.');
         }
-      } else {
-        const last = localStorage.getItem('marketscout_last_paid_report_v1');
-        if (last) {
-          setRecoveryId(JSON.parse(last).reservationId ?? '');
-          setCompleted(true);
-          setPaymentLocked(true);
-        } else setPaymentLocked(false);
-      }
+      } else setPaymentLocked(false);
       setPaymentStateChecked(true);
     } catch {
       setPaymentStep('unresolved');
@@ -144,17 +151,17 @@ export default function UsernameSearch({
     }
     });
     return () => { active = false; };
-  }, []);
+  }, [controlledScope]);
 
   async function handleLivePayment() {
     if (!paymentEnabled) return;
     if (operationRef.current || paying || paymentLocked) return;
 
+    if (!controlledScope) return;
     let previousPending: { reservationId?: string; username?: string; status?: string } | null = null;
     try {
-      const stored = localStorage.getItem('marketscout_pending_payment_v1');
-      if (stored) previousPending = JSON.parse(stored);
-      if (previousPending && !canSafelyResumePayment(previousPending.status)) {
+      previousPending = findPendingPayment(localStorage, controlledScope.username, controlledScope.reservationId);
+      if (previousPending && (!canSafelyResumePayment(previousPending.status) || previousPending.reservationId?.toLowerCase() !== controlledScope.reservationId.toLowerCase())) {
         setPaymentLocked(true);
         setPaymentMessage('A payment request may have been submitted. Do not pay again until its status is verified.');
         return;
@@ -199,6 +206,7 @@ export default function UsernameSearch({
         throw new Error('Payment signing is not enabled');
       }
       if (quote.controlledTest.username !== target) throw new Error('Enter the approved test username: @' + quote.controlledTest.username);
+      if (quote.controlledTest.reservationId.toLowerCase() !== controlledScope.reservationId.toLowerCase() || quote.controlledTest.username !== controlledScope.username) throw new Error('Payment scope changed. Refresh before proceeding.');
 
       const confirmed = window.confirm(
         'Authorize a payment of 0.005 USDC on Celo Mainnet ' +
@@ -212,7 +220,7 @@ export default function UsernameSearch({
       const reservationId = quote.controlledTest.reservationId;
       const activeReservationId = previousPending?.reservationId ?? reservationId;
       operationId = activeReservationId;
-      localStorage.setItem('marketscout_pending_payment_v1', JSON.stringify({ reservationId: activeReservationId, username: target, status: 'signing' }));
+      localStorage.setItem(pendingPaymentKey(activeReservationId), JSON.stringify({ reservationId: activeReservationId, username: target, status: 'signing' }));
       setPaymentStep('signing');
       setPaymentLocked(true);
       setRecoveryId(activeReservationId);
@@ -223,7 +231,7 @@ export default function UsernameSearch({
 
       try {
         localStorage.setItem(
-          'marketscout_pending_payment_v1',
+          pendingPaymentKey(activeReservationId),
           JSON.stringify({
             reservationId: activeReservationId,
             username: target,
@@ -241,7 +249,7 @@ export default function UsernameSearch({
 
       // Persist this conservative state before the request. From this point a
       // network interruption can no longer be treated as a pre-payment retry.
-      localStorage.setItem('marketscout_pending_payment_v1', JSON.stringify({
+      localStorage.setItem(pendingPaymentKey(activeReservationId), JSON.stringify({
         reservationId: activeReservationId,
         username: target,
         payer: payment.payer,
@@ -277,8 +285,9 @@ export default function UsernameSearch({
     } catch (cause) {
       if (!authorizationCreated && operationId) {
         try {
-          const current = JSON.parse(localStorage.getItem('marketscout_pending_payment_v1') ?? '{}');
-          if (current.reservationId === operationId) localStorage.removeItem('marketscout_pending_payment_v1');
+          const key = pendingPaymentKey(operationId);
+          const current = JSON.parse(localStorage.getItem(key) ?? '{}');
+          if (current.reservationId === operationId) localStorage.removeItem(key);
           setPaymentStep(null);
           setPaymentLocked(false);
         } catch { setPaymentStep('unresolved'); setPaymentLocked(true); }

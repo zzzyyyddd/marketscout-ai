@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { createWalletClient, custom, getAddress, type Address } from 'viem';
 import { celo } from 'viem/chains';
 import { isCompetitorReport } from '@/lib/report';
+import { paidReportKey, pendingPaymentKey } from '@/lib/payment-ui-state';
 
 type Challenge = {
   message: string;
@@ -96,9 +97,10 @@ export default function RecoverPage() {
       if (result.status !== 'recovered' || !isCompetitorReport(result.report)) throw new Error(result.error ?? 'Recovery pending. Do not pay again.');
       setReport(result.report);
       try {
-        localStorage.setItem('marketscout_last_paid_report_v1', JSON.stringify({ reservationId: reservationId.trim() }));
-        const pending = JSON.parse(localStorage.getItem('marketscout_pending_payment_v1') ?? '{}');
-        if (pending.reservationId === reservationId.trim()) localStorage.removeItem('marketscout_pending_payment_v1');
+        localStorage.setItem(paidReportKey(reservationId.trim()), JSON.stringify({ reservationId: reservationId.trim() }));
+        const key = pendingPaymentKey(reservationId.trim());
+        const pending = JSON.parse(localStorage.getItem(key) ?? '{}');
+        if (pending.reservationId?.toLowerCase() === reservationId.trim().toLowerCase()) localStorage.removeItem(key);
       } catch { /* Render the recovered report even if browser storage fails. */ }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Recovery failed');
