@@ -5,8 +5,9 @@ import {
   ExternalLink,
   ShieldCheck,
   TrendingUp,
+  Percent,
+  UserPlus,
   Users,
-  Video,
 } from 'lucide-react';
 
 const fmt = (n: number) =>
@@ -27,11 +28,13 @@ export default function CompetitorDashboard({
   historicalProof?: boolean;
   historical?: boolean;
 }) {
+  const hasPosts = report.sampledPosts > 0 && report.posts.length > 0;
   const metrics = [
     { label: 'Followers', value: compact(report.followers), icon: Users },
+    { label: 'Following', value: compact(report.following), icon: UserPlus },
     { label: 'Sampled posts', value: fmt(report.sampledPosts), icon: BarChart3 },
-    { label: 'Average interactions', value: compact(report.avgEngagement), icon: TrendingUp },
-    { label: 'Video posts', value: fmt(report.videoPosts), icon: Video },
+    { label: 'Average interactions', value: hasPosts ? compact(report.avgEngagement) : 'Unavailable', icon: TrendingUp },
+    { label: 'Engagement rate', value: hasPosts && report.engagementRate !== null ? `${report.engagementRate.toFixed(2)}%` : 'Unavailable', icon: Percent },
   ];
 
   return (
@@ -48,9 +51,10 @@ export default function CompetitorDashboard({
             <div><h3 className="text-2xl font-semibold">@{report.username}</h3><p className="text-slate-400">{report.name}</p></div>
             <a href={`https://www.instagram.com/${encodeURIComponent(report.username)}/`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-4 py-2 text-sm hover:bg-white/10">Instagram profile <ExternalLink size={15}/></a>
           </div>
+          {report.biography && <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-slate-300">{report.biography}</p>}
         </section>
 
-        <section className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <section aria-label="Account metrics" className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {metrics.map(({ label, value, icon: Icon }) => (
             <div key={label} className="rounded-2xl border border-white/10 bg-white/5 p-5">
               <div className="mb-4 flex items-center justify-between text-slate-400"><span className="text-sm">{label}</span><Icon size={18}/></div>
@@ -59,7 +63,8 @@ export default function CompetitorDashboard({
           ))}
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-3">
+        {hasPosts ? <section className="grid gap-6 lg:grid-cols-3">
+          {report.topPosts.length > 0 && (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-6 lg:col-span-2">
             <h3 className="text-xl font-semibold">Top-performing posts</h3>
             <p className="mt-1 text-sm text-slate-400">Ranked by likes + comments in the available sample</p>
@@ -78,8 +83,10 @@ export default function CompetitorDashboard({
               })}
             </div>
           </div>
+          )}
 
           <div className="space-y-6">
+            {report.videoPosts + report.imagePosts === report.sampledPosts && (
             <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
               <h3 className="text-xl font-semibold">Content mix</h3>
               <div className="mt-6 flex h-3 overflow-hidden rounded-full bg-slate-800">
@@ -88,6 +95,7 @@ export default function CompetitorDashboard({
               </div>
               <p className="mt-4 text-sm text-slate-300">{report.videoPosts} videos · {report.imagePosts} nonvideo posts</p>
             </div>
+            )}
             {historicalProof && (
             <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/5 p-6">
               <div className="flex items-center gap-2 text-emerald-400"><ShieldCheck size={20}/><h3 className="font-semibold">x402 Payment Proof</h3></div>
@@ -96,9 +104,17 @@ export default function CompetitorDashboard({
             </div>
             )}
           </div>
-        </section>
+        </section> : (
+          <section className="rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-8">
+            <div className="flex items-start gap-4">
+              <span className="rounded-xl bg-emerald-400/10 p-3 text-emerald-300"><BarChart3 size={22} aria-hidden="true" /></span>
+              <div><h3 className="text-lg font-semibold">Post-level analytics unavailable for this snapshot</h3>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-400">Post data was not available in the saved sample, so engagement and content performance cannot be measured for this snapshot.</p></div>
+            </div>
+          </section>
+        )}
         </div>
-        <IntelligenceExplorer posts={report.posts} historical={historical} />
+        {hasPosts && <IntelligenceExplorer posts={report.posts} historical={historical} />}
 
     </>
   );

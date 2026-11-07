@@ -128,7 +128,7 @@ export default function IntelligenceExplorer({
         </div>
         <div className="rounded-xl bg-slate-900/70 p-4">
           <p className="text-xs text-slate-400">Average interactions</p>
-          <p className="mt-2 text-2xl font-bold">{compact(average)}</p>
+          <p className="mt-2 text-2xl font-bold">{filtered.length ? compact(average) : 'Unavailable'}</p>
         </div>
         <div className="rounded-xl bg-slate-900/70 p-4">
           <p className="text-xs text-slate-400">Top post</p>
